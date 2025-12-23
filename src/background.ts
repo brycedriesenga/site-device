@@ -78,11 +78,36 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                         ...(device.isolation ? [{
                             header: "Cookie",
                             operation: "remove" as chrome.declarativeNetRequest.HeaderOperation
-                        }] : [])
+                        }] : []),
+                        // Client Hints
+                        {
+                            header: "Sec-CH-UA-Mobile",
+                            operation: "set",
+                            value: (device.userAgent.includes('Mobile') || device.userAgent.includes('Android')) ? "?1" : "?0"
+                        },
+                        {
+                            header: "Sec-CH-UA-Platform",
+                            operation: "set",
+                            value: (function () {
+                                if (device.userAgent.includes('Android')) return '"Android"';
+                                if (device.userAgent.includes('iPhone') || device.userAgent.includes('iPad')) return '"iOS"';
+                                if (device.userAgent.includes('Mac')) return '"macOS"';
+                                return '"Windows"';
+                            })()
+                        },
+                        {
+                            header: "Sec-CH-UA",
+                            operation: "set",
+                            // Minimal brand list to satisfy basic checks
+                            value: (device.userAgent.includes('Android') || device.userAgent.includes('Mobile'))
+                                ? '"Google Chrome";v="119", "Chromium";v="119", "Not?A_Brand";v="24"'
+                                : '"Google Chrome";v="119", "Chromium";v="119", "Not?A_Brand";v="24"'
+                        }
                     ]
                 },
                 condition: {
-                    urlFilter: `*__sd_id=${device.id}*`,
+                    // Encode the ID to match the URL encoding (e.g. shape:123 -> shape%3A123)
+                    urlFilter: `*__sd_id=${encodeURIComponent(device.id)}*`,
                     resourceTypes: [
                         "main_frame",
                         "sub_frame",
@@ -111,5 +136,43 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                 }
             });
         });
+    } else if (msg.type === 'CLEAR_DATA') {
+        const { dataType, url } = msg;
+
+        try {
+            const origin = new URL(url).origin;
+            let dataToRemove = {};
+
+            if (dataType === 'cache') {
+                // Note: Standard HTTP Cache cannot be cleared by origin. 
+                // We clear Cache Storage (Service Worker cache) and Service Workers.
+                dataToRemove = {
+                    "cacheStorage": true,
+                    "serviceWorkers": true
+                };
+            } else if (dataType === 'storage') {
+                dataToRemove = {
+                    "localStorage": true,
+                    "indexedDB": true,
+                    "fileSystems": true,
+                    "webSQL": true
+                };
+            } else if (dataType === 'cookies') {
+                dataToRemove = { "cookies": true };
+            }
+
+            chrome.browsingData.remove({
+                "origins": [origin]
+            }, dataToRemove, () => {
+                const err = chrome.runtime.lastError;
+                if (err) console.error("Clear Data Error:", err);
+                sendResponse({ success: !err, error: err?.message });
+            });
+
+            return true; // Keep channel open
+        } catch (e: any) {
+            console.error("Invalid URL:", url);
+            sendResponse({ success: false, error: e.message });
+        }
     }
 });

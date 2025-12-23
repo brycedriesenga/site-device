@@ -62,7 +62,6 @@ const checkIsManaged = async () => {
         // Execute injection
         // The config is passed via window.name, so we need to ensure the injected script can access it.
         // For now, we'll just inject the script if window.name indicates a managed frame.
-        // For now, we'll just inject the script if window.name indicates a managed frame.
         // The inject.js script will then read window.name itself.
         injectScript();
 
@@ -199,9 +198,17 @@ function enableMirroring() {
                 if (window.name && window.name.startsWith('SD_CONF:')) {
                     const config = JSON.parse(window.name.substring(8));
                     if (config.id === msg.targetDeviceId) {
+                        // Robust Height Calculation
+                        const body = document.body;
+                        const html = document.documentElement;
+                        const height = Math.max(
+                            body.scrollHeight, body.offsetHeight,
+                            html.clientHeight, html.scrollHeight, html.offsetHeight
+                        );
+
                         _sendResponse({
                             scrollWidth: document.documentElement.scrollWidth,
-                            scrollHeight: document.documentElement.scrollHeight,
+                            scrollHeight: height,
                             clientWidth: document.documentElement.clientWidth,
                             clientHeight: document.documentElement.clientHeight,
                             pixelRatio: window.devicePixelRatio

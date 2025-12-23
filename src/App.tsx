@@ -1404,8 +1404,8 @@ function App() {
 
       {editingDevice && (
         <DeviceSettingsModal
-          device={editingDevice}
-          url={activeUrl}
+          isOpen={!!editingDevice}
+          deviceProps={editingDevice}
           onSave={handleSaveDevice}
           onClose={() => setEditingDevice(null)}
         />

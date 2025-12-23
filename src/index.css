@@ -2,14 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide style panel when no selection (controled by .hide-style-panel class on container) */
+.hide-style-panel .tlui-style-panel {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 .unselectable {
   user-select: none;
   -webkit-user-select: none;
 }
 
 /* Screenshot Utilities */
-body.screenshot-mode .device-header {
+body.screenshot-mode .device-header,
+body.screenshot-mode .global-controls,
+body.screenshot-mode [class*="tl-ui"],
+body.screenshot-mode [class*="tlui-"],
+body.screenshot-mode .tldraw__ui,
+body.screenshot-mode .tl-overlays,
+body.screenshot-mode .tlui-toast-container,
+body.screenshot-mode .tl-watermark_SEE-LICENSE,
+body.screenshot-mode [data-testid="tl-watermark-unlicensed"] {
   visibility: hidden !important;
+  opacity: 0 !important;
+  display: none !important;
+  pointer-events: none !important;
+}
+
+body.screenshot-mode .device-frame {
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
 }
 
 /* Background Patterns */

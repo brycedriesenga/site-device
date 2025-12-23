@@ -18,7 +18,7 @@ interface DeviceFrameProps {
 }
 
 // Internal helper for the dropdown
-const ScreenshotMenu = ({ onScreenshot }: { onScreenshot: (t: '1x' | '2x' | 'full-1x' | 'full-2x') => void }) => {
+export const ScreenshotMenu = ({ onScreenshot }: { onScreenshot: (t: '1x' | '2x' | 'full-1x' | 'full-2x') => void }) => {
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 

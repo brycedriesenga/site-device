@@ -203,12 +203,16 @@
         }
 
         if (config.type === 'mobile' || config.type === 'tablet') {
-            override(navigator, 'platform', config.type === 'mobile' ? 'iPhone' : 'iPad');
+            const isAndroid = config.ua.includes('Android');
+            override(navigator, 'platform', isAndroid ? 'Linux armv8l' : (config.type === 'mobile' ? 'iPhone' : 'iPad'));
             override(navigator, 'maxTouchPoints', 5);
             override(navigator, 'ontouchstart', null); // Presence implies touch support
         } else {
             // Desktop defaults
             override(navigator, 'maxTouchPoints', 0);
+            // Don't necessarily override platform for desktop unless needed, but maybe sync with UA?
+            if (config.ua.includes('Mac')) override(navigator, 'platform', 'MacIntel');
+            else if (config.ua.includes('Win')) override(navigator, 'platform', 'Win32');
         }
 
         // 3. Client Hints Mock
