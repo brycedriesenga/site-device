@@ -21,28 +21,28 @@ export const defaultState: StorageState = {
  * @deprecated Use ChromeStorageAdapter for new code - this will be removed in a future version
  */
 export const saveState = async (state: Partial<StorageState>) => {
-    console.warn('[Storage] saveState is deprecated, use ChromeStorageAdapter instead');
+    console.warn('[SiteDevice][Storage] saveState is deprecated, use ChromeStorageAdapter instead')
     try {
-        const current = await loadState();
-        const newState = { ...current, ...state };
-        await chrome.storage.local.set({ [STORAGE_KEY]: newState });
+        const current = await loadState()
+        const newState = { ...current, ...state }
+        await chrome.storage.local.set({ [STORAGE_KEY]: newState })
     } catch (e) {
-        console.error('Failed to save state:', e);
+        console.error('[SiteDevice][Storage] Failed to save state', e)
     }
-};
+}
 
 /**
  * @deprecated Use ChromeStorageAdapter for new code - this will be removed in a future version
  */
 export const loadState = async (): Promise<StorageState> => {
     try {
-        const result = await chrome.storage.local.get(STORAGE_KEY);
-        return (result[STORAGE_KEY] as StorageState) || defaultState;
+        const result = await chrome.storage.local.get(STORAGE_KEY)
+        return (result[STORAGE_KEY] as StorageState) || defaultState
     } catch (e) {
-        console.error('Failed to load state:', e);
-        return defaultState;
+        console.error('[SiteDevice][Storage] Failed to load state', e)
+        return defaultState
     }
-};
+}
 
 /**
  * @deprecated Use ChromeStorageAdapter for new code - this will be removed in a future version
@@ -54,7 +54,7 @@ export const addRecentUrl = async (url: string) => {
         const recents = state.recentUrls || [];
         const newRecents = [url, ...recents.filter(u => u !== url)].slice(0, 10);
         await saveState({ recentUrls: newRecents });
-    } catch (e) {
+    } catch {
         // Ignore
     }
 };

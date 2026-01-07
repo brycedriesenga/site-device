@@ -1,3 +1,4 @@
+export { AnnotationContainerShapeUtil, type IAnnotationContainer } from './AnnotationContainerShapeUtil'
 export { RectangleAnnotationShapeUtil, type IRectangleAnnotation } from './RectangleAnnotationShapeUtil'
 export { CircleAnnotationShapeUtil, type ICircleAnnotation } from './CircleAnnotationShapeUtil'
 export { ArrowAnnotationShapeUtil, type IArrowAnnotation } from './ArrowAnnotationShapeUtil'

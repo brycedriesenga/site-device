@@ -1,4 +1,4 @@
-console.log('SiteDevice background script running');
+console.log('[SiteDevice][Background] Service worker running');
 
 // Setup DeclarativeNetRequest rules to strip X-Frame-Options
 chrome.runtime.onInstalled.addListener(() => {
@@ -48,11 +48,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             replayType = msg.type.replace('EVENT_', 'REPLAY_');
         }
 
-        // 1. Broadcast to extension pages (The Tldraw App)
-        chrome.runtime.sendMessage({
+        const forwardedMessage = {
             type: replayType,
-            payload: msg.payload
-        }).catch(() => { });
+            payload: msg.payload,
+            sourceDeviceId: msg.sourceDeviceId
+        };
+
+        // 1. Broadcast to extension pages (The Tldraw App)
+        chrome.runtime.sendMessage(forwardedMessage).catch(() => { });
 
         // 2. Broadcast to peer frames (Other devices)
         chrome.webNavigation.getAllFrames({ tabId: sender.tab.id! }, (frames) => {
@@ -61,17 +64,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                 if (frame.frameId === sender.frameId) return;
 
                 // Send message to this frame
-                chrome.tabs.sendMessage(sender.tab!.id!, {
-                    type: replayType,
-                    payload: msg.payload
-                }, { frameId: frame.frameId });
+                chrome.tabs.sendMessage(sender.tab!.id!, forwardedMessage, { frameId: frame.frameId });
             });
         });
     } else if (msg.type === 'UPDATE_UA_RULES') {
-        const devices = msg.devices;
+        type UaDevice = { id: string; userAgent: string; isolation?: boolean }
+        const devices: UaDevice[] = Array.isArray(msg.devices) ? (msg.devices as UaDevice[]) : []
 
         // 1. Calculate new rules
-        const newRules: chrome.declarativeNetRequest.Rule[] = devices.map((device: any, index: number) => {
+        const newRules: chrome.declarativeNetRequest.Rule[] = devices.map((device, index: number) => {
             return {
                 id: 1000 + index,
                 priority: 1,
@@ -139,9 +140,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                 addRules: newRules
             }, () => {
                 if (chrome.runtime.lastError) {
-                    console.error("DNR Error:", chrome.runtime.lastError);
+                    console.error('[SiteDevice][Background] DNR updateDynamicRules error', chrome.runtime.lastError);
                 } else {
-                    console.log(`Updated UA Rules: Removed ${removeRuleIds.length}, Added ${newRules.length}`);
+                    console.log(`[SiteDevice][Background] Updated UA rules: Removed ${removeRuleIds.length}, Added ${newRules.length}`);
                 }
             });
         });
@@ -150,7 +151,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
         try {
             const origin = new URL(url).origin;
-            let dataToRemove = {};
+            let dataToRemove: chrome.browsingData.DataTypeSet = {};
 
             if (dataType === 'cache') {
                 // Note: Standard HTTP Cache cannot be cleared by origin. 
@@ -174,14 +175,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                 "origins": [origin]
             }, dataToRemove, () => {
                 const err = chrome.runtime.lastError;
-                if (err) console.error("Clear Data Error:", err);
+                if (err) console.error('[SiteDevice][Background] Clear data error', err);
                 sendResponse({ success: !err, error: err?.message });
             });
 
             return true; // Keep channel open
-        } catch (e: any) {
-            console.error("Invalid URL:", url);
-            sendResponse({ success: false, error: e.message });
+        } catch (e) {
+            const message = e instanceof Error ? e.message : String(e)
+            console.error('[SiteDevice][Background] Invalid URL', url)
+            sendResponse({ success: false, error: message })
         }
     }
 });

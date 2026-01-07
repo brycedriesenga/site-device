@@ -37,7 +37,7 @@ export class DeviceMessageBridge {
             payload,
             sourceDeviceId: this.deviceId
         }).catch(e => {
-            console.error(`[Bridge] Failed to send message: ${type}`, e)
+            console.error(`[SiteDevice][Bridge] Failed to send message: ${type}`, e)
         })
     }
 
@@ -90,7 +90,7 @@ export class DeviceMessageBridge {
                     try {
                         handler(payload)
                     } catch (e) {
-                        console.error(`[Bridge] Handler error for ${type}`, e)
+                        console.error(`[SiteDevice][Bridge] Handler error for ${type}`, e)
                     }
                 })
             }
@@ -108,7 +108,7 @@ export function getDeviceIdFromConfig(): string | null {
             return config.id
         }
     } catch (e) {
-        console.error('[DeviceConfig] Failed to parse config', e)
+        console.error('[SiteDevice][DeviceConfig] Failed to parse config', e)
     }
     return null
 }

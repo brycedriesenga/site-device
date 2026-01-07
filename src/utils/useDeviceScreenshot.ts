@@ -14,13 +14,13 @@ export function useDeviceScreenshot(editor: Editor | null) {
 
             const now = Date.now()
             if (isCapturingRef.current) {
-                console.warn('[Screenshot] Capture already in progress')
+                console.warn('[SiteDevice][Screenshot] Capture already in progress')
                 return
             }
 
             // Lightweight throttle to avoid overlapping camera/shape updates.
             if (now - lastCaptureAtRef.current < THROTTLE_MS) {
-                console.warn('[Screenshot] Capture throttled')
+                console.warn('[SiteDevice][Screenshot] Capture throttled')
                 return
             }
 
@@ -31,7 +31,7 @@ export function useDeviceScreenshot(editor: Editor | null) {
                 await screenshotter.capture(deviceId, { type })
                 lastCaptureAtRef.current = Date.now()
             } catch (error) {
-                console.error('[Screenshot] Capture failed', error)
+                console.error('[SiteDevice][Screenshot] Capture failed', error)
                 alert(`Screenshot failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
             } finally {
                 isCapturingRef.current = false
