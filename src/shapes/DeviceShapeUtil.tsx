@@ -3,6 +3,7 @@ import {
     Geometry2d,
     HTMLContainer,
     type RecordProps,
+    type TLResizeInfo,
     Rectangle2d,
     T,
     type TLBaseShape,
@@ -12,7 +13,6 @@ import {
 } from 'tldraw'
 import { useState, useEffect } from 'react'
 
-
 export type IDeviceShape = TLBaseShape<
     'device',
     {
@@ -20,9 +20,14 @@ export type IDeviceShape = TLBaseShape<
         h: number
         url: string
         name: string
-        deviceType: string // 'mobile' | 'tablet' | 'desktop'
+        deviceType: 'mobile' | 'tablet' | 'desktop'
         userAgent: string
         pixelRatio: number
+        clientHints?: {
+            platform: string
+            mobile: boolean
+            brands?: { brand: string; version: string }[]
+        }
     }
 >
 
@@ -33,9 +38,9 @@ export class DeviceShapeUtil extends BaseBoxShapeUtil<IDeviceShape> {
         h: T.number,
         url: T.string,
         name: T.string,
-        deviceType: T.string,
+        deviceType: T.literalEnum('mobile', 'tablet', 'desktop'),
         userAgent: T.string,
-        pixelRatio: T.number,
+        pixelRatio: T.number
     }
 
     override getDefaultProps(): IDeviceShape['props'] {
@@ -58,24 +63,29 @@ export class DeviceShapeUtil extends BaseBoxShapeUtil<IDeviceShape> {
         })
     }
 
+    // Simple resizing with no constraints - full user flexibility
+    override onResize = (shape: IDeviceShape, info: TLResizeInfo<IDeviceShape>) => {
+        return resizeBox(shape, info)
+    }
+
     override component(shape: IDeviceShape) {
+        /* eslint-disable react-hooks/rules-of-hooks */
         const { w, h, url, name, userAgent, deviceType } = shape.props
         const editor = useEditor()
         const isSelected = useValue('isSelected', () => editor.getSelectedShapeIds().includes(shape.id), [editor, shape.id])
 
-        // Loading State
-        const [isLoading, setIsLoading] = useState(true);
+        const [isLoading, setIsLoading] = useState(true)
 
-        // Reset loading when URL changes (or if empty)
         useEffect(() => {
-            if (url) setIsLoading(true);
-        }, [url]);
+            if (url) setIsLoading(true)
+        }, [url])
+        /* eslint-enable react-hooks/rules-of-hooks */
 
-        // Construct Isolation Config
+        // Build iframe config
         const sdConf = {
             id: shape.id,
             ua: userAgent,
-            ch: {}, // TODO: Add client hints support
+            ch: shape.props.clientHints || {},
             type: deviceType,
             w: w,
             h: h
@@ -85,8 +95,23 @@ export class DeviceShapeUtil extends BaseBoxShapeUtil<IDeviceShape> {
         return (
             <HTMLContainer style={{ pointerEvents: 'all' }}>
                 <div style={{ width: '100%', height: '100%', pointerEvents: 'none', display: 'flex', flexDirection: 'column' }}>
-                    <div className="device-frame w-full h-full bg-white border border-gray-200 flex flex-col overflow-hidden relative shadow-sm rounded-lg">
+                    <div className={`device-frame w-full h-full bg-white flex flex-col overflow-hidden relative rounded-lg transition-all shadow-sm ${
+                        isSelected 
+                            ? 'border-2 border-blue-500 shadow-lg' 
+                            : 'border border-gray-200'
+                    }`}>
+                        {/* Device Header - shown when selected */}
+                        {isSelected && (
+                            <div className="px-3 py-2 bg-gradient-to-r from-blue-50 to-blue-100 border-b border-blue-200 flex items-center justify-between">
+                                <div>
+                                    <div className="text-xs font-semibold text-blue-900">{name}</div>
+                                    <div className="text-xs text-blue-700">{w} × {h} px</div>
+                                </div>
+                                <div className="text-xs font-medium text-blue-600 capitalize">{deviceType}</div>
+                            </div>
+                        )}
 
+                        {/* Click shield for unselected state */}
                         {!isSelected && (
                             <div
                                 className="absolute inset-0 z-50 bg-transparent"
@@ -94,7 +119,8 @@ export class DeviceShapeUtil extends BaseBoxShapeUtil<IDeviceShape> {
                             />
                         )}
 
-                        <div className="flex-1 bg-white relative">
+                        {/* Iframe container */}
+                        <div className="flex-1 bg-white relative overflow-hidden">
                             {url ? (
                                 <>
                                     {isLoading && (
@@ -106,23 +132,25 @@ export class DeviceShapeUtil extends BaseBoxShapeUtil<IDeviceShape> {
                                         </div>
                                     )}
                                     <iframe
-                                        // Removed key={url} to prevent infinite Loop on sync
                                         src={(function () {
                                             try {
-                                                const u = new URL(url);
-                                                u.searchParams.set('__sd_id', shape.id);
-                                                return u.toString();
-                                            } catch (e) { return url; }
+                                                const u = new URL(url)
+                                                u.searchParams.set('__sd_id', shape.id)
+                                                return u.toString()
+                                            } catch { 
+                                                return url 
+                                            }
                                         })()}
                                         onLoad={() => setIsLoading(false)}
                                         className="w-full h-full border-none pointer-events-auto"
                                         title={name}
                                         name={iframeName}
+                                        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
                                     />
                                 </>
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-zinc-300 text-sm">
-                                    No URL
+                                    No URL loaded
                                 </div>
                             )}
                         </div>
@@ -134,10 +162,5 @@ export class DeviceShapeUtil extends BaseBoxShapeUtil<IDeviceShape> {
 
     override indicator(shape: IDeviceShape) {
         return <rect width={shape.props.w} height={shape.props.h} />
-    }
-
-    // Allow resizing
-    override onResize = (shape: IDeviceShape, info: any) => {
-        return resizeBox(shape, info)
     }
 }
