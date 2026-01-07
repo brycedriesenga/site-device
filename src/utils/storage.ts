@@ -17,7 +17,11 @@ export const defaultState: StorageState = {
     theme: 'light'
 };
 
+/**
+ * @deprecated Use ChromeStorageAdapter for new code - this will be removed in a future version
+ */
 export const saveState = async (state: Partial<StorageState>) => {
+    console.warn('[Storage] saveState is deprecated, use ChromeStorageAdapter instead');
     try {
         const current = await loadState();
         const newState = { ...current, ...state };
@@ -27,6 +31,9 @@ export const saveState = async (state: Partial<StorageState>) => {
     }
 };
 
+/**
+ * @deprecated Use ChromeStorageAdapter for new code - this will be removed in a future version
+ */
 export const loadState = async (): Promise<StorageState> => {
     try {
         const result = await chrome.storage.local.get(STORAGE_KEY);
@@ -37,6 +44,9 @@ export const loadState = async (): Promise<StorageState> => {
     }
 };
 
+/**
+ * @deprecated Use ChromeStorageAdapter for new code - this will be removed in a future version
+ */
 export const addRecentUrl = async (url: string) => {
     if (!url) return;
     try {
@@ -49,6 +59,9 @@ export const addRecentUrl = async (url: string) => {
     }
 };
 
+/**
+ * @deprecated Use ChromeStorageAdapter for new code - this will be removed in a future version
+ */
 export const clearState = async () => {
     await chrome.storage.local.remove(STORAGE_KEY);
 };

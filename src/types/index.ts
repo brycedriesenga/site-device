@@ -34,24 +34,5 @@ export interface StorageState {
     theme: 'light' | 'dark';
 }
 
-export type AnnotationTool = 'select' | 'pen' | 'rect' | 'circle' | 'arrow' | 'text' | 'eraser';
-
-export interface Annotation {
-    id: string;
-    type: 'path' | 'rect' | 'circle' | 'arrow' | 'text';
-    color: string;
-    strokeWidth: number;
-    points?: number[]; // For path (flat array [x1, y1, x2, y2...])
-    x?: number;        // For shapes/text
-    y?: number;
-    width?: number;    // For shapes
-    height?: number;
-    content?: string;  // For text
-    fontSize?: number;
-    startX?: number;   // For arrow
-    startY?: number;
-    endX?: number;
-    endY?: number;
-    controlX?: number;
-    controlY?: number;
-}
+// Legacy storage types kept for backward compatibility
+// New persistence is handled by ChromeStorageAdapter and tldraw shapes
