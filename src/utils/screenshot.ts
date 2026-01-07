@@ -32,12 +32,10 @@ export async function captureDeviceScreenshot(
         const isFullPage = type.startsWith('full-page')
         const scaleFactor = type.includes('2x') ? 2 : 1
 
-        if (isFullPage) {
-            await handleFullPageScreenshot(editor, shape, scaleFactor, topBarOffset)
-        } else {
-            // Viewport Screenshot
-            await handleViewportScreenshot(editor, shape, scaleFactor, topBarOffset)
-        }
+        // Unified Handler for both Viewport and Full-Page
+        // The only difference is the target height (Device Height vs Page Scroll Height)
+        await handleUnifiedScreenshot(editor, shape, scaleFactor, topBarOffset, isFullPage)
+
     } catch (e) {
         console.error("Screenshot failed", e)
         alert("Screenshot failed. See console for details.")
@@ -49,136 +47,98 @@ export async function captureDeviceScreenshot(
     }
 }
 
-async function handleViewportScreenshot(editor: Editor, shape: any, scaleFactor: number, topBarOffset: number) {
-    const { w, h, name } = shape.props
-
-    // Calculate Zoom and Position
-    const viewW = window.innerWidth
-    const contentScreenW = w * scaleFactor
-    const marginX = Math.max(0, (viewW - contentScreenW) / 2)
-
-    // CamX Calculation
-    const camX = (marginX / scaleFactor) - shape.x
-
-    // CamY Calculation
-    // We want content at `topBarOffset` from top.
-    const camY = (topBarOffset / scaleFactor) - shape.y
-
-    // Animate Camera (Instant)
-    editor.setCamera({ x: camX, y: camY, z: scaleFactor })
-
-    await wait(500)
-
-    const dataUrl = await captureTab()
-    const img = await loadImage(dataUrl)
-    const dpr = window.devicePixelRatio
-
-    const iframe = document.querySelector(`iframe[name*="${shape.id}"]`)
-    if (!iframe) throw new Error("Iframe not found")
-
-    const rect = iframe.getBoundingClientRect()
-
-    const canvas = document.createElement('canvas')
-    canvas.width = w * scaleFactor
-    canvas.height = h * scaleFactor
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    // Screen Crop Area
-    const viewY = topBarOffset
-    const viewX = 0
-    const viewWLocal = window.innerWidth
-    const viewHLocal = window.innerHeight
-
-    const sourceX = Math.max(viewX, rect.x)
-    const sourceY = Math.max(viewY, rect.y)
-    const sourceRight = Math.min(viewX + viewWLocal, rect.right)
-    const sourceBottom = Math.min(viewY + viewHLocal, rect.bottom)
-
-    const sourceW = sourceRight - sourceX
-    const sourceH = sourceBottom - sourceY
-
-    if (sourceW > 0 && sourceH > 0) {
-        ctx.drawImage(img,
-            sourceX * dpr, sourceY * dpr,
-            sourceW * dpr, sourceH * dpr,
-            (sourceX - rect.x),
-            (sourceY - rect.y),
-            sourceW,
-            sourceH
-        )
-    }
-
-    downloadCanvas(canvas, `${name}-${scaleFactor}x.png`)
-}
-
-async function handleFullPageScreenshot(editor: Editor, shape: any, scaleFactor: number, topBarOffset: number) {
+async function handleUnifiedScreenshot(
+    editor: Editor,
+    shape: any,
+    scaleFactor: number,
+    _topBarOffset: number,
+    isFullPage: boolean
+) {
     const { w, h, name } = shape.props
     const originalHeight = h
     const targetId = shape.id
 
-    const tab = await chrome.tabs.getCurrent()
-    if (!tab?.id) throw new Error("No active tab")
+    // FORCE Top Bar Offset to 0 because we hide UI via CSS
+    const effectiveTopBarOffset = 0;
 
-    const dims = await getPageDims(tab.id, targetId)
-    if (!dims) {
-        alert("Could not connect to device page. Try reloading it.")
-        return
+    // Default to device height (Viewport Mode)
+    let captureHeight = h
+
+    // If Full Page, try to get scroll height
+    if (isFullPage) {
+        try {
+            const tab = await chrome.tabs.getCurrent()
+            if (tab?.id) {
+                const dims = await getPageDims(tab.id, targetId)
+                if (dims) {
+                    captureHeight = Math.max(dims.scrollHeight, h)
+                } else {
+                    console.warn("Could not get page dims, falling back to viewport height")
+                }
+            }
+        } catch (e) {
+            console.warn("Full page capture error", e)
+        }
     }
 
-    const fullHeight = Math.max(dims.scrollHeight, h)
     const originalCamera = { ...editor.getCamera() }
 
     try {
-        editor.updateShape({
-            id: shape.id,
-            type: 'device',
-            props: { h: fullHeight }
-        })
-
-        await wait(800)
+        // Expand shape for capture if needed
+        if (captureHeight !== h) {
+            editor.updateShape({
+                id: shape.id,
+                type: 'device',
+                props: { h: captureHeight }
+            })
+            // Wait for resize
+            await wait(300)
+        }
 
         const masterCanvas = document.createElement('canvas')
         masterCanvas.width = w * scaleFactor
-        masterCanvas.height = fullHeight * scaleFactor
+        masterCanvas.height = captureHeight * scaleFactor
         const ctx = masterCanvas.getContext('2d')
         if (!ctx) throw new Error("Canvas context failed")
 
         const viewW = window.innerWidth
         const viewH = window.innerHeight
 
-        // Effective Screen Area
-        const safeScreenW = viewW
-        const safeScreenH = viewH - topBarOffset // Use dynamic offset
+        // Safety Margin for Capture (ensures device is not at edge)
+        const SAFETY_MARGIN = 40
 
-        const tileWorldW = safeScreenW / scaleFactor
-        const tileWorldH = safeScreenH / scaleFactor
+        // Effective Capture Area
+        // We will position the device such that the "Tile" is at (SAFETY_MARGIN, effectiveTopBarOffset + SAFETY_MARGIN)
+        const captureY = effectiveTopBarOffset + SAFETY_MARGIN
+        const captureX = SAFETY_MARGIN
+
+        const safeViewW = viewW - captureX
+        const safeViewH = viewH - captureY
+
+        const tileWorldW = safeViewW / scaleFactor
+        const tileWorldH = safeViewH / scaleFactor
 
         const cols = Math.ceil(w / tileWorldW)
-        const rows = Math.ceil(fullHeight / tileWorldH)
+        const rows = Math.ceil(captureHeight / tileWorldH)
 
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
                 const offX = c * tileWorldW
                 const offY = r * tileWorldH
 
-                // Center Horizontally
-                const contentScreenW = w * scaleFactor
-                const marginX = Math.max(0, (viewW - contentScreenW) / 2)
+                // Camera Logic (Translation Model):
+                // We want to translate the world such that (shape.x + offX) moves to (captureX / scaleFactor).
+                // Screen = (World + Camera) * Scale
+                // captureX = (shape.x + offX + camX) * Scale
+                // captureX / Scale = shape.x + offX + camX
+                // camX = (captureX / Scale) - (shape.x + offX)
 
-                let targetScreenX = 0
-                if (cols === 1) {
-                    targetScreenX = marginX
-                }
-
-                const camX = (targetScreenX / scaleFactor) - (shape.x + offX)
-
-                // CamY: target topBarOffset
-                const camY = (topBarOffset / scaleFactor) - (shape.y + offY)
+                const camX = (captureX / scaleFactor) - (shape.x + offX)
+                const camY = (captureY / scaleFactor) - (shape.y + offY)
 
                 editor.setCamera({ x: camX, y: camY, z: scaleFactor })
 
-                await wait(400)
+                await wait(600) // Generous wait for layout/render
 
                 const dataUrl = await captureTab()
                 const img = await loadImage(dataUrl)
@@ -189,9 +149,19 @@ async function handleFullPageScreenshot(editor: Editor, shape: any, scaleFactor:
                 const rect = iframe.getBoundingClientRect()
                 const dpr = window.devicePixelRatio
 
-                // Capture bounds
+                // Debug Logging
+                console.log(`[Screenshot Debug] Tile ${r},${c}`, {
+                    shapePos: { x: shape.x, y: shape.y },
+                    off: { x: offX, y: offY },
+                    cam: { x: camX, y: camY },
+                    captureTarget: { x: captureX, y: captureY },
+                    iframeRect: rect,
+                    scaleFactor
+                });
+
+                // Capture bounds (We scan the whole safe area)
                 const viewX = 0
-                const viewY = topBarOffset
+                const viewY = effectiveTopBarOffset
 
                 const sourceX = Math.max(viewX, rect.x)
                 const sourceY = Math.max(viewY, rect.y)
@@ -202,27 +172,48 @@ async function handleFullPageScreenshot(editor: Editor, shape: any, scaleFactor:
                 const sourceH = sourceBottom - sourceY
 
                 if (sourceW > 0 && sourceH > 0) {
-                    const destX = sourceX - rect.x
-                    const destY = sourceY - rect.y
 
+                    // Destination Calculation based on Camera Offset
+                    // WorldX = (ScreenX / Scale) - camX (Inverse of Screen calculation)
+
+                    const worldX = (sourceX / scaleFactor) - camX
+                    const worldY = (sourceY / scaleFactor) - camY
+
+                    // Relative to Shape Origin
+                    const relX = worldX - shape.x
+                    const relY = worldY - shape.y
+
+                    const destX = relX * scaleFactor
+                    const destY = relY * scaleFactor
+
+                    console.log(`[Screenshot Debug] Draw ${r},${c}`, {
+                        source: { x: sourceX, y: sourceY, w: sourceW, h: sourceH },
+                        world: { x: worldX, y: worldY },
+                        dest: { x: destX, y: destY }
+                    });
+
+                    // Draw!
                     ctx.drawImage(img,
                         sourceX * dpr, sourceY * dpr,
                         sourceW * dpr, sourceH * dpr,
                         destX, destY,
-                        sourceW, sourceH
+                        sourceW * scaleFactor,
+                        sourceH * scaleFactor
                     )
                 }
             }
         }
 
-        downloadCanvas(masterCanvas, `fullpage-${name}-${scaleFactor}x.png`)
+        downloadCanvas(masterCanvas, `${name}-${isFullPage ? 'full' : 'view'}-${scaleFactor}x.png`)
 
     } finally {
-        editor.updateShape({
-            id: shape.id,
-            type: 'device',
-            props: { h: originalHeight }
-        })
+        if (captureHeight !== originalHeight) {
+            editor.updateShape({
+                id: shape.id,
+                type: 'device',
+                props: { h: originalHeight }
+            })
+        }
         editor.setCamera(originalCamera)
     }
 }

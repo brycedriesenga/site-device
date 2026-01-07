@@ -60,14 +60,13 @@ const checkIsManaged = async () => {
         };
 
         // Execute injection
-        // The config is passed via window.name, so we need to ensure the injected script can access it.
-        // For now, we'll just inject the script if window.name indicates a managed frame.
-        // The inject.js script will then read window.name itself.
         injectScript();
 
         // MARK TITLE FOR CDP TARGET DISCOVERY
+        let deviceId = '';
         try {
             const config = JSON.parse(window.name.substring(8));
+            deviceId = config.id;
             const idTag = `[SD:${config.id}]`;
 
             const markTitle = () => {
@@ -98,34 +97,62 @@ const checkIsManaged = async () => {
                 if (document.head) headObserver.observe(document.head, { childList: true });
             }
         } catch (e) { console.error("SiteDevice Title Mark Error", e); }
-    }
 
-    try {
-        // We send a ping to background to ask if we are inside the dashboard tab
-        const response = await chrome.runtime.sendMessage({ type: "CHECK_IS_MANAGED" });
-        if (response && response.isManaged) {
-            console.log("SiteDevice: Managed Frame Detected. Enabling mirroring.");
-            enableMirroring();
+        try {
+            // We send a ping to background to ask if we are inside the dashboard tab
+            const response = await chrome.runtime.sendMessage({ type: "CHECK_IS_MANAGED" });
+            if (response && response.isManaged) {
+                console.log("SiteDevice: Managed Frame Detected. Enabling mirroring.");
+                enableMirroring(deviceId);
+            }
+        } catch (e) {
+            // Error implies extension context might be invalid or standard web page
         }
-    } catch (e) {
-        // Error implies extension context might be invalid or standard web page
     }
 };
 
-function enableMirroring() {
+function enableMirroring(deviceId?: string) {
     if (isMirroring) return;
     isMirroring = true;
 
-    // SCROLL
+    // SCROLL LOOP (RAF Strategy for Fluidity)
+    let isTicking = false;
+
     window.addEventListener('scroll', () => {
         if (isReplaying) return;
-        const scrollX = window.scrollX / (document.documentElement.scrollWidth - window.innerWidth);
-        const scrollY = window.scrollY / (document.documentElement.scrollHeight - window.innerHeight);
 
-        chrome.runtime.sendMessage({
-            type: 'EVENT_SCROLL',
-            payload: { scrollX, scrollY }
-        });
+        if (!isTicking) {
+            window.requestAnimationFrame(() => {
+                const currentX = window.scrollX;
+                const currentY = window.scrollY;
+                const docWidth = document.documentElement.scrollWidth;
+                const docHeight = document.documentElement.scrollHeight;
+                const winWidth = window.innerWidth;
+                const winHeight = window.innerHeight;
+
+                const scrollX = currentX / (docWidth - winWidth || 1);
+                const scrollY = currentY / (docHeight - winHeight || 1);
+
+                const payload = {
+                    scrollX,
+                    scrollY,
+                    pixelX: currentX,
+                    pixelY: currentY,
+                    docWidth,
+                    docHeight
+                };
+                //@ts-ignore
+                if (deviceId) payload.deviceId = deviceId;
+
+                chrome.runtime.sendMessage({
+                    type: 'EVENT_SCROLL',
+                    payload
+                });
+
+                isTicking = false;
+            });
+            isTicking = true;
+        }
     }, { passive: true });
 
     // CLICK
@@ -170,9 +197,10 @@ function enableMirroring() {
             window.scrollTo({
                 top: targetY,
                 left: targetX,
-                behavior: 'auto' // Instant, to avoid lag or "chasing"
+                behavior: 'auto' // Instant
             });
-            setTimeout(() => isReplaying = false, 50);
+            // Extended safety timeout to prevent jumpy echo
+            setTimeout(() => isReplaying = false, 100);
         } else if (msg.type === 'REPLAY_CLICK') {
             isReplaying = true;
             const el = document.querySelector(msg.payload.selector) as HTMLElement;
@@ -216,13 +244,24 @@ function enableMirroring() {
                     }
                 }
             } catch (e) { console.error(e); }
+        } else if (msg.type === 'CMD_NAV_BACK') {
+            window.history.back();
+        } else if (msg.type === 'CMD_NAV_FORWARD') {
+            window.history.forward();
         }
     });
 
-    // NAVIGATION sync (simple version via messaging background)
-    // If the page navigates, we want to tell the Host App to update the URL bar?
-    // Listen to hashchange or popstate for SPAs
-    // Real page loads will just happen.
+    // URL MONITOR (SPA Support)
+    let lastUrl = location.href;
+    // Initial Notify
+    chrome.runtime.sendMessage({ type: 'EVENT_NAVIGATED', payload: { url: lastUrl } });
+
+    setInterval(() => {
+        if (location.href !== lastUrl) {
+            lastUrl = location.href;
+            chrome.runtime.sendMessage({ type: 'EVENT_NAVIGATED', payload: { url: lastUrl } });
+        }
+    }, 500);
 }
 
 checkIsManaged();

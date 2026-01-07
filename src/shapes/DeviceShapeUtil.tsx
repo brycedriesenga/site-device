@@ -10,6 +10,7 @@ import {
     useEditor,
     useValue
 } from 'tldraw'
+import { useState, useEffect } from 'react'
 
 
 export type IDeviceShape = TLBaseShape<
@@ -62,6 +63,14 @@ export class DeviceShapeUtil extends BaseBoxShapeUtil<IDeviceShape> {
         const editor = useEditor()
         const isSelected = useValue('isSelected', () => editor.getSelectedShapeIds().includes(shape.id), [editor, shape.id])
 
+        // Loading State
+        const [isLoading, setIsLoading] = useState(true);
+
+        // Reset loading when URL changes (or if empty)
+        useEffect(() => {
+            if (url) setIsLoading(true);
+        }, [url]);
+
         // Construct Isolation Config
         const sdConf = {
             id: shape.id,
@@ -87,18 +96,30 @@ export class DeviceShapeUtil extends BaseBoxShapeUtil<IDeviceShape> {
 
                         <div className="flex-1 bg-white relative">
                             {url ? (
-                                <iframe
-                                    src={(function () {
-                                        try {
-                                            const u = new URL(url);
-                                            u.searchParams.set('__sd_id', shape.id);
-                                            return u.toString();
-                                        } catch (e) { return url; }
-                                    })()}
-                                    className="w-full h-full border-none pointer-events-auto"
-                                    title={name}
-                                    name={iframeName}
-                                />
+                                <>
+                                    {isLoading && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-zinc-50 z-20">
+                                            <div className="flex flex-col items-center gap-2">
+                                                <div className="animate-spin rounded-full h-6 w-6 border-2 border-zinc-200 border-b-blue-500" />
+                                                <span className="text-xs text-zinc-400 font-medium">Loading...</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <iframe
+                                        // Removed key={url} to prevent infinite Loop on sync
+                                        src={(function () {
+                                            try {
+                                                const u = new URL(url);
+                                                u.searchParams.set('__sd_id', shape.id);
+                                                return u.toString();
+                                            } catch (e) { return url; }
+                                        })()}
+                                        onLoad={() => setIsLoading(false)}
+                                        className="w-full h-full border-none pointer-events-auto"
+                                        title={name}
+                                        name={iframeName}
+                                    />
+                                </>
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-zinc-300 text-sm">
                                     No URL

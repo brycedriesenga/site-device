@@ -41,11 +41,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return;
     }
 
-    if (msg.type.startsWith('EVENT_')) {
+    if (msg.type.startsWith('EVENT_') || msg.type.startsWith('CMD_NAV_')) {
         // Broadcast to all frames in the SAME tab, except the sender frame
-        const replayType = msg.type.replace('EVENT_', 'REPLAY_');
+        let replayType = msg.type;
+        if (msg.type.startsWith('EVENT_')) {
+            replayType = msg.type.replace('EVENT_', 'REPLAY_');
+        }
 
-        // We get all frames in the sender tab
+        // 1. Broadcast to extension pages (The Tldraw App)
+        chrome.runtime.sendMessage({
+            type: replayType,
+            payload: msg.payload
+        }).catch(() => { });
+
+        // 2. Broadcast to peer frames (Other devices)
         chrome.webNavigation.getAllFrames({ tabId: sender.tab.id! }, (frames) => {
             frames?.forEach(frame => {
                 // Skip the sender frame
