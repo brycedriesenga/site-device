@@ -112,6 +112,29 @@ export const ContextualToolbar = track(({ onEnterAnnotationMode }: { onEnterAnno
     const annotationShape = editor.getShape(annotationId)
     const isAnnotationVisible = annotationShape ? (annotationShape.opacity !== 0) : false
 
+    const setAnnotationOpacity = (opacity: number) => {
+        const container = editor.getShape(annotationId)
+        if (!container) return
+
+        editor.updateShape({
+            id: annotationId,
+            type: 'annotation-container',
+            opacity
+        })
+
+        // Ensure children follow container visibility.
+        const childIds = editor.getSortedChildIdsForParent(annotationId)
+        for (const childId of childIds) {
+            const child = editor.getShape(childId)
+            if (!child) continue
+            editor.updateShape({
+                id: child.id,
+                type: child.type,
+                opacity
+            })
+        }
+    }
+
     const handleAnnotate = () => {
         const devW = (shape.props as { w: number }).w
         const devH = (shape.props as { h: number }).h
@@ -170,7 +193,8 @@ export const ContextualToolbar = track(({ onEnterAnnotationMode }: { onEnterAnno
         }
 
         // Ensure visible
-        editor.updateShape({ id: annotationId, type: 'annotation-container', opacity: 1 })
+        setAnnotationOpacity(1)
+        editor.bringToFront([annotationId])
 
         // Remove the temporary "Clipping Frame" (old method) if it exists
         const oldClipId = `shape:clip_${deviceId.replace('shape:', '')}` as TLShapeId
@@ -188,18 +212,15 @@ export const ContextualToolbar = track(({ onEnterAnnotationMode }: { onEnterAnno
     }
 
     const handleToggleVisibility = () => {
-        if (!annotationShape) return;
-        const newOpacity = isAnnotationVisible ? 0 : 1;
-        editor.updateShape({
-            id: annotationId,
-            type: 'annotation-container',
-            opacity: newOpacity
-        });
+        if (!annotationShape) return
+
+        const newOpacity = isAnnotationVisible ? 0 : 1
+        setAnnotationOpacity(newOpacity)
 
         if (newOpacity === 0 && editor.getSelectedShapeIds().includes(annotationId)) {
-            editor.selectNone();
+            editor.selectNone()
         }
-    };
+    }
 
     return (
         <>

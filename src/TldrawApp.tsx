@@ -12,6 +12,7 @@ import { DeviceShapeUtil } from './shapes/DeviceShapeUtil'
 import type { IDeviceShape } from './shapes/DeviceShapeUtil'
 
 // Annotation shapes
+import { AnnotationContainerShapeUtil } from './shapes/annotations/AnnotationContainerShapeUtil'
 import { RectangleAnnotationShapeUtil } from './shapes/annotations/RectangleAnnotationShapeUtil'
 import { CircleAnnotationShapeUtil } from './shapes/annotations/CircleAnnotationShapeUtil'
 import { ArrowAnnotationShapeUtil } from './shapes/annotations/ArrowAnnotationShapeUtil'
@@ -27,11 +28,12 @@ import { VerticalToolbar } from './components/VerticalToolbar'
 // Tools & Utilities
 import { MobileTool, TabletTool, DesktopTool } from './tools'
 import { useTldrawPersistence } from './utils/useTldrawPersistence'
-import { loadState } from './utils/storage'
+import { AppStateStorage } from './utils/AppStateStorage'
 
 // Register all shape utilities
 const shapeUtils = [
     DeviceShapeUtil,
+    AnnotationContainerShapeUtil,
     RectangleAnnotationShapeUtil,
     CircleAnnotationShapeUtil,
     ArrowAnnotationShapeUtil,
@@ -69,7 +71,8 @@ export default function TldrawApp() {
             <div className="floating-ui-layer pointer-events-none absolute inset-0 overflow-hidden">
                 <ContextualToolbar
                     {...(props as Record<string, unknown>)}
-                    onEnterAnnotationMode={(deviceId: string) => {
+                    onEnterAnnotationMode={(deviceId: string, _containerId: string) => {
+                        void _containerId
                         setEditingDeviceId(deviceId)
                         editingDeviceIdRef.current = deviceId
                     }}
@@ -167,71 +170,164 @@ export default function TldrawApp() {
     useEffect(() => {
         const init = async () => {
             try {
-                const state = await loadState()
-                setActiveUrl(state.url || '')
-                setRecentUrls(state.recentUrls || [])
-                setIsReady(true)
-            } catch (e) {
-                console.error("Failed to load state", e)
+                const state = await AppStateStorage.load()
+                setActiveUrl(state.url)
+                setRecentUrls(state.recentUrls)
+            } catch (error) {
+                console.error('[SiteDevice][TldrawApp] Failed to load app state', error)
+            } finally {
                 setIsReady(true)
             }
         }
+
         init()
     }, [])
+
+    // Persist app state (URL / recent URLs)
+    useEffect(() => {
+        if (!isReady) return
+
+        const timeout = window.setTimeout(() => {
+            AppStateStorage.save({ url: activeUrl, recentUrls })
+        }, 300)
+
+        return () => window.clearTimeout(timeout)
+    }, [activeUrl, recentUrls, isReady])
 
     // Handle tldraw editor mount
     const handleMount = (editorInstance: Editor) => {
         setEditor(editorInstance)
-        console.log('[TldrawApp] Editor mounted, shapes registered:', shapeUtils.map(s => (s as { type: string }).type))
+        console.log(
+            '[SiteDevice][TldrawApp] Editor mounted, shape utils:',
+            shapeUtils.map((s) => (s as { type: string }).type)
+        )
+    }
 
-        // Setup store listener for UA rule updates
-        const unsubscribe = editorInstance.store.listen(() => {
-            const shapes = editorInstance.getCurrentPageShapes()
+    // Keep derived systems (UA rules, device wrappers, annotation containers) in sync
+    useEffect(() => {
+        if (!editor) return
+
+        let uaTimeout: number | null = null
+        let lastDevicesHash = ''
+
+        const sync = () => {
+            const shapes = editor.getCurrentPageShapes()
             const deviceShapes = shapes.filter((s): s is IDeviceShape => s.type === 'device')
+
+            // Keep wrapper frame + annotation container dimensions aligned with device dimensions.
+            for (const device of deviceShapes) {
+                const expectedFrameId = `shape:frame_${device.id.replace('shape:', '')}` as TLShape['id']
+                const expectedAnnotationId = `shape:annotation_${device.id.replace('shape:', '')}` as TLShape['id']
+
+                const parent = editor.getShape(device.parentId)
+                if (parent && parent.type === 'frame' && parent.id === expectedFrameId) {
+                    const p = parent.props as { w: number; h: number }
+                    const w = device.props.w
+                    const h = device.props.h
+                    if (p.w !== w || p.h !== h) {
+                        editor.updateShape({ id: parent.id, type: 'frame', props: { w, h } })
+                    }
+                }
+
+                const annotation = editor.getShape(expectedAnnotationId)
+                if (annotation && annotation.type === 'annotation-container') {
+                    const p = annotation.props as { w: number; h: number }
+                    const w = device.props.w
+                    const minH = device.props.h
+
+                    const propsUpdate: Partial<{ w: number; h: number }> = {}
+                    if (p.w !== w) propsUpdate.w = w
+                    if (p.h < minH) propsUpdate.h = minH
+
+                    if (Object.keys(propsUpdate).length) {
+                        editor.updateShape({ id: annotation.id, type: 'annotation-container', props: propsUpdate })
+                    }
+                }
+            }
+
+            // Clean up orphaned wrapper frames / annotation containers when a device is deleted.
+            const deviceIds = new Set(deviceShapes.map((d) => d.id))
+            const toDelete: TLShape['id'][] = []
+
+            for (const shape of shapes) {
+                if (shape.type === 'frame' && shape.id.startsWith('shape:frame_device_')) {
+                    const deviceId = `shape:${shape.id.replace('shape:frame_', '')}` as TLShape['id']
+                    if (!deviceIds.has(deviceId)) toDelete.push(shape.id)
+                }
+
+                if (shape.type === 'annotation-container' && shape.id.startsWith('shape:annotation_device_')) {
+                    const deviceId = `shape:${shape.id.replace('shape:annotation_', '')}` as TLShape['id']
+                    if (!deviceIds.has(deviceId)) toDelete.push(shape.id)
+                }
+            }
+
+            if (toDelete.length) {
+                editor.deleteShapes(toDelete)
+            }
+
+            // Debounced UA rule updates (send empty list to clear rules).
             const devicesPayload = deviceShapes.map((s) => ({
                 id: s.id,
                 userAgent: s.props.userAgent,
-                isolation: true
+                isolation: true,
             }))
 
-            if (devicesPayload.length > 0) {
-                chrome.runtime.sendMessage({
-                    type: 'UPDATE_UA_RULES',
-                    devices: devicesPayload
-                }).catch(e => console.error('Failed to update UA rules', e))
-            }
-        }, { scope: 'all' })
+            const nextHash = JSON.stringify(devicesPayload)
+            if (nextHash !== lastDevicesHash) {
+                lastDevicesHash = nextHash
 
-        return () => unsubscribe()
-    }
+                if (uaTimeout) window.clearTimeout(uaTimeout)
+                uaTimeout = window.setTimeout(() => {
+                    chrome.runtime
+                        .sendMessage({ type: 'UPDATE_UA_RULES', devices: devicesPayload })
+                        .catch((e) => console.error('[SiteDevice][TldrawApp] Failed to update UA rules', e))
+                    uaTimeout = null
+                }, 250)
+            }
+        }
+
+        const unlisten = editor.store.listen(sync, { scope: 'all' })
+        sync()
+
+        return () => {
+            if (uaTimeout) window.clearTimeout(uaTimeout)
+            unlisten()
+        }
+    }, [editor])
 
     // Listen for messages from content scripts and other frames
     useEffect(() => {
         if (!editor) return
         
-        const handleMessage = (msg: { type: string; payload: Record<string, unknown> }) => {
+        const handleMessage = (msg: { type: string; payload: Record<string, unknown>; sourceDeviceId?: string }) => {
             if (msg.type === 'REPLAY_SCROLL') {
-                const { deviceId, pixelY, docHeight } = msg.payload
+                const deviceId = msg.sourceDeviceId ?? (msg.payload.deviceId as string | undefined)
                 if (!deviceId) return
-                
+
+                const pixelY = typeof msg.payload.pixelY === 'number' ? msg.payload.pixelY : 0
+                const docHeight = typeof msg.payload.docHeight === 'number' ? msg.payload.docHeight : undefined
+
                 // Find annotation container for this device
-                const annotationId = `shape:annotation_${(deviceId as string).replace('shape:', '')}` as TLShape['id']
+                const annotationId = `shape:annotation_${deviceId.replace('shape:', '')}` as TLShape['id']
                 const container = editor.getShape(annotationId)
-                
-                if (container) {
+
+                if (container && container.type === 'annotation-container') {
+                    const currentH = (container.props as { h: number }).h
+
                     editor.updateShape({
                         id: annotationId,
                         type: 'annotation-container',
-                        y: -1 * ((pixelY as number) || 0),
-                        props: { h: (docHeight as number) || (container as TLShape & { props: { h: number } }).props.h }
+                        y: -1 * pixelY,
+                        props: { h: docHeight ?? currentH },
                     })
                 }
-            } else if (msg.type === 'EVENT_NAVIGATED') {
-                const { url } = msg.payload
-                if (url && (url as string) !== activeUrl) {
-                    setActiveUrl(url as string)
-                    setRecentUrls(prev => {
-                        const newUrls = [url as string, ...prev.filter(u => u !== url)].slice(0, 10)
+            } else if (msg.type === 'REPLAY_NAVIGATED') {
+                const url = msg.payload.url
+
+                if (typeof url === 'string' && url !== activeUrl) {
+                    setActiveUrl(url)
+                    setRecentUrls((prev) => {
+                        const newUrls = [url, ...prev.filter((u) => u !== url)].slice(0, 10)
                         return newUrls
                     })
                 }
@@ -241,6 +337,45 @@ export default function TldrawApp() {
         chrome.runtime.onMessage.addListener(handleMessage)
         return () => chrome.runtime.onMessage.removeListener(handleMessage)
     }, [editor, activeUrl])
+
+    // In annotation mode, reparent newly created shapes into the annotation container so they
+    // move with scroll syncing.
+    useEffect(() => {
+        if (!editor || !editingDeviceId) return
+
+        const annotationId = `shape:annotation_${editingDeviceId.replace('shape:', '')}` as TLShape['id']
+        const pageId = editor.getCurrentPageId()
+
+        const knownIds = new Set(editor.getCurrentPageShapes().map((s) => s.id))
+
+        // Make sure the annotation container is on top so it captures pointer events over iframes.
+        if (editor.getShape(annotationId)) {
+            editor.bringToFront([annotationId])
+        }
+
+        const unlisten = editor.store.listen(
+            () => {
+                if (!editor.getShape(annotationId)) return
+
+                for (const shape of editor.getCurrentPageShapes()) {
+                    if (knownIds.has(shape.id)) continue
+                    knownIds.add(shape.id)
+
+                    if (shape.id === annotationId) continue
+                    if (shape.type === 'device') continue
+                    if (shape.type === 'annotation-container') continue
+
+                    // Only reparent shapes created on the page root.
+                    if (shape.parentId === pageId) {
+                        editor.reparentShapes([shape.id], annotationId)
+                    }
+                }
+            },
+            { scope: 'all', source: 'user' }
+        )
+
+        return () => unlisten()
+    }, [editor, editingDeviceId])
 
     // Handle URL changes
     const handleUrlChange = (newUrl: string) => {
@@ -297,9 +432,9 @@ export default function TldrawApp() {
                     }
                 )
             })
-            console.log(`Cleared ${dataType} for ${activeUrl}`)
-        } catch (e) { 
-            console.error(`Failed to clear ${dataType}`, e)
+            console.log(`[SiteDevice][TldrawApp] Cleared ${dataType} for ${activeUrl}`)
+        } catch (e) {
+            console.error(`[SiteDevice][TldrawApp] Failed to clear ${dataType}`, e)
             alert(`Failed to clear ${dataType}: ${e}`)
         }
     }

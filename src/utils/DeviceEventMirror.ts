@@ -96,7 +96,7 @@ export class DeviceEventMirror {
                     element.click()
                 }
             } catch (e) {
-                console.error('[Mirror] Failed to replay click', e)
+                console.error('[SiteDevice][Mirror] Failed to replay click', e)
             }
             setTimeout(() => {
                 this.isReplaying = false
@@ -134,7 +134,7 @@ export class DeviceEventMirror {
                     element.dispatchEvent(new Event('change', { bubbles: true }))
                 }
             } catch (e) {
-                console.error('[Mirror] Failed to replay input', e)
+                console.error('[SiteDevice][Mirror] Failed to replay input', e)
             }
             setTimeout(() => {
                 this.isReplaying = false

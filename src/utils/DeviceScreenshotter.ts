@@ -139,7 +139,7 @@ export class DeviceScreenshotter {
         const grid = this.getTileGrid(session, device.deviceW)
 
         console.log(
-            `[Screenshot] Capturing ${grid.rows}x${grid.cols} tiles (${device.deviceW}x${session.captureHeight}px at ${session.scaleFactor}x)`
+            `[SiteDevice][Screenshot] Capturing ${grid.rows}x${grid.cols} tiles (${device.deviceW}x${session.captureHeight}px at ${session.scaleFactor}x)`
         )
 
         for (let row = 0; row < grid.rows; row++) {
@@ -202,7 +202,7 @@ export class DeviceScreenshotter {
 
         const iframe = document.querySelector(`iframe[name*="${session.deviceId}"]`) as HTMLIFrameElement | null
         if (!iframe) {
-            console.warn(`[Screenshot] Iframe not found for tile ${row},${col}`)
+            console.warn(`[SiteDevice][Screenshot] Iframe not found for tile ${row},${col}`)
             return
         }
 
@@ -218,7 +218,7 @@ export class DeviceScreenshotter {
         const sourceH = Math.max(0, sourceBottom - sourceY)
 
         if (sourceW <= 0 || sourceH <= 0) {
-            console.warn(`[Screenshot] Tile ${row},${col} has no visible area`)
+            console.warn(`[SiteDevice][Screenshot] Tile ${row},${col} has no visible area`)
             return
         }
 
@@ -242,7 +242,7 @@ export class DeviceScreenshotter {
             sourceH * session.scaleFactor
         )
 
-        console.log(`[Screenshot] Captured tile ${row},${col}`)
+        console.log(`[SiteDevice][Screenshot] Captured tile ${row},${col}`)
     }
 
     /**
