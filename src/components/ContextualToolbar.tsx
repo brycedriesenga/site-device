@@ -49,24 +49,24 @@ export const ContextualToolbar = track(({ onEnterAnnotationMode }: { onEnterAnno
     }
 
     const handleRotate = () => {
-        const { w, h } = shape.props as any;
-        const newW = h;
-        const newH = w;
+        const { w, h } = shape.props as { w: number; h: number }
+        const newW = h
+        const newH = w
 
         editor.updateShape({
             id: shape.id,
             type: 'device',
             props: { w: newW, h: newH }
-        });
+        })
 
         // Loop: Check if wrapped in a frame, if so update frame too
-        const parent = editor.getShape(shape.parentId);
+        const parent = editor.getShape(shape.parentId)
         if (parent && parent.type === 'frame') {
             editor.updateShape({
                 id: parent.id,
                 type: 'frame',
                 props: { w: newW, h: newH }
-            });
+            })
         }
     }
 
@@ -93,7 +93,7 @@ export const ContextualToolbar = track(({ onEnterAnnotationMode }: { onEnterAnno
         setMenuPos({ x: rect.left, y: rect.bottom + 4 });
     }
 
-    const handleSettingsSave = (newProps: any) => {
+    const handleSettingsSave = (newProps: Record<string, unknown>) => {
         editor.updateShape({
             id: shape.id,
             type: 'device',
@@ -102,17 +102,17 @@ export const ContextualToolbar = track(({ onEnterAnnotationMode }: { onEnterAnno
     }
 
     // Annotation Logic
-    const deviceId = shape.id;
+    const deviceId = shape.id
     // ID Scheme: shape:annotation_...
-    const annotationId = `shape:annotation_${deviceId.replace('shape:', '')}` as any;
+    const annotationId = `shape:annotation_${deviceId.replace('shape:', '')}` as TLShapeId
 
-    const annotationShape = editor.getShape(annotationId);
-    const isAnnotationVisible = annotationShape ? (annotationShape.opacity !== 0) : false;
+    const annotationShape = editor.getShape(annotationId)
+    const isAnnotationVisible = annotationShape ? (annotationShape.opacity !== 0) : false
 
     const handleAnnotate = () => {
-        const devW = (shape.props as any).w;
-        const devH = (shape.props as any).h;
-        const parent = editor.getShape(shape.parentId);
+        const devW = (shape.props as { w: number }).w
+        const devH = (shape.props as { h: number }).h
+        const parent = editor.getShape(shape.parentId)
 
         // Define frameId consistently
         let frameId: TLShapeId;
@@ -167,22 +167,22 @@ export const ContextualToolbar = track(({ onEnterAnnotationMode }: { onEnterAnno
         }
 
         // Ensure visible
-        editor.updateShape({ id: annotationId, type: 'annotation-container', opacity: 1 });
+        editor.updateShape({ id: annotationId, type: 'annotation-container', opacity: 1 })
 
         // Remove the temporary "Clipping Frame" (old method) if it exists
-        const oldClipId = `shape:clip_${deviceId.replace('shape:', '')}` as any;
+        const oldClipId = `shape:clip_${deviceId.replace('shape:', '')}` as TLShapeId
         if (editor.getShape(oldClipId)) {
-            editor.deleteShape(oldClipId);
+            editor.deleteShape(oldClipId)
         }
 
         // Enter Focus Mode
         if (onEnterAnnotationMode) {
-            onEnterAnnotationMode(shape.id, annotationId);
+            onEnterAnnotationMode(shape.id, annotationId)
         }
 
-        editor.setSelectedShapes([annotationId]);
-        editor.setCurrentTool('draw');
-    };
+        editor.setSelectedShapes([annotationId])
+        editor.setCurrentTool('draw')
+    }
 
     const handleToggleVisibility = () => {
         if (!annotationShape) return;
