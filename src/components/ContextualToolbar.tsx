@@ -16,13 +16,16 @@ import {
     Eye,
     EyeOff
 } from 'lucide-react'
-import { captureDeviceScreenshot } from '../utils/screenshot'
 import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { DeviceSettingsModal } from './DeviceSettingsModal'
+import { useDeviceScreenshot } from '../utils/useDeviceScreenshot'
+import type { ScreenshotType } from '../utils/DeviceScreenshotter'
 
 export const ContextualToolbar = track(({ onEnterAnnotationMode }: { onEnterAnnotationMode?: (deviceId: string, containerId: string) => void }) => {
     const editor = useEditor()
+    const capture = useDeviceScreenshot(editor)
+
     // Check if we have exactly one selected shape and it is a device
     const selectedShapes = editor.getSelectedShapes()
 
@@ -70,10 +73,10 @@ export const ContextualToolbar = track(({ onEnterAnnotationMode }: { onEnterAnno
         }
     }
 
-    const handleScreenshotAction = (type: 'viewport-1x' | 'viewport-2x' | 'full-page' | 'full-page-2x') => {
-        setScreenshotMenuOpen(false);
-        setMenuPos(null);
-        captureDeviceScreenshot(editor, shape.id, { type });
+    const handleScreenshotAction = (type: ScreenshotType) => {
+        setScreenshotMenuOpen(false)
+        setMenuPos(null)
+        capture(shape.id, type)
     }
 
     const toggleScreenshotMenu = () => {
