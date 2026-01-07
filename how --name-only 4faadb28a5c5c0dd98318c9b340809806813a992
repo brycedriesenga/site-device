@@ -1,0 +1,108 @@
+[33mcommit e6a97436effa2e1a119b96c92d113b1c5072a5ad[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfeat-register-tldraw-shapes-persistence[m[33m, [m[1;31morigin/refactor/tldraw-consolidation[m[33m, [m[1;32mrefactor/tldraw-consolidation[m[33m)[m
+Merge: 4faadb2 0a979dd
+Author: cto-new[bot] <140088366+cto-new[bot]@users.noreply.github.com>
+Date:   Wed Jan 7 19:11:31 2026 +0000
+
+    Merge pull request #2 from brycedriesenga/feat-device-presets-device-shape
+    
+    feat(device-shapes): add device presets and header feedback for DeviceShapeUtil
+
+[33mcommit 0a979ddc07e730413e47e3e9a1213fc9b5e830f2[m[33m ([m[1;31morigin/feat-device-presets-device-shape[m[33m)[m
+Author: cto-new[bot] <140088366+cto-new[bot]@users.noreply.github.com>
+Date:   Wed Jan 7 19:10:09 2026 +0000
+
+    feat(device-shapes): add device presets and enhance DeviceShapeUtil with presets, selection header, and flexible sizing
+    
+    [no breaking changes]
+
+src/shapes/DeviceShapeUtil.tsx
+src/utils/devicePresets.ts
+
+[33mcommit 4faadb28a5c5c0dd98318c9b340809806813a992[m[33m ([m[1;31morigin/feat-persistence-tldraw-chrome-storage[m[33m)[m
+Merge: 4fa2ac5 3e0b593
+Author: cto-new[bot] <140088366+cto-new[bot]@users.noreply.github.com>
+Date:   Wed Jan 7 18:26:18 2026 +0000
+
+    Merge pull request #1 from brycedriesenga/feat-tldraw-annotation-shapes-phase1
+    
+    Add 5 annotation shape utilities for tldraw (Rectangle, Circle, Arrow, Text, Path)
+
+[33mcommit 3e0b593636f20ba3ea19727e4c188542eaa6b142[m[33m ([m[1;31morigin/feat-tldraw-annotation-shapes-phase1[m[33m)[m
+Author: cto-new[bot] <140088366+cto-new[bot]@users.noreply.github.com>
+Date:   Wed Jan 7 17:28:16 2026 +0000
+
+    feat(shapes/annotations): introduce tldraw annotation shape utilities (Rectangle, Circle, Arrow, Text, Path)
+    
+    - add 5 new shape utilities for annotation on the tldraw canvas
+    - provide geometry, rendering, default props, and resize behavior
+    - export via index.ts and include README for context
+    - ensure build passes with the new shapes
+
+package-lock.json
+src/shapes/annotations/ArrowAnnotationShapeUtil.tsx
+src/shapes/annotations/CircleAnnotationShapeUtil.tsx
+src/shapes/annotations/PathAnnotationShapeUtil.tsx
+src/shapes/annotations/README.md
+src/shapes/annotations/RectangleAnnotationShapeUtil.tsx
+src/shapes/annotations/TextAnnotationShapeUtil.tsx
+src/shapes/annotations/index.ts
+
+[33mcommit 4fa2ac5437948f0b47c0b26c3ff8effa84f93573[m[33m ([m[1;34mgrafted[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m
+Author: Bryce Driesenga <brycedriesenga@gmail.com>
+Date:   Wed Jan 7 11:12:21 2026 -0500
+
+    Fix screenshot alignment and version bump to 1.0.3
+
+.gitignore
+README.md
+eslint.config.js
+index.html
+package-lock.json
+package.json
+postcss.config.js
+project_context.md
+public/vite.svg
+src/App.css
+src/App.tsx
+src/PopupApp.tsx
+src/TldrawApp.tsx
+src/assets/react.svg
+src/background.ts
+src/components/AnnotationLayer.tsx
+src/components/AnnotationToolbar.tsx
+src/components/BackgroundPicker.tsx
+src/components/BottomControls.tsx
+src/components/ConfirmationModal.tsx
+src/components/ContextualToolbar.tsx
+src/components/DeviceFrame.tsx
+src/components/DeviceSettingsModal.tsx
+src/components/FocusOverlay.tsx
+src/components/GlobalControls.tsx
+src/components/GlobalSettingsModal.tsx
+src/components/LayoutPicker.tsx
+src/components/Toolbar.tsx
+src/components/VerticalToolbar.tsx
+src/content.ts
+src/index.css
+src/inject.js
+src/main.tsx
+src/manifest.ts
+src/popup.html
+src/popup.tsx
+src/shapes/AnnotationShapeUtil.tsx
+src/shapes/DeviceShapeUtil.tsx
+src/tools/AddDeviceTool.ts
+src/tools/BaseDeviceTool.ts
+src/tools/DesktopTool.ts
+src/tools/MobileTool.ts
+src/tools/TabletTool.ts
+src/tools/index.ts
+src/types/index.ts
+src/utils/layout.ts
+src/utils/screenshot.ts
+src/utils/storage.ts
+tailwind.config.js
+tsconfig.app.json
+tsconfig.json
+tsconfig.node.json
+vite.config.ts

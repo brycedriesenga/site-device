@@ -1,19 +1,19 @@
 export interface Device {
-    id: string;
-    name: string;
-    width: number;
-    height: number;
-    type: 'mobile' | 'tablet' | 'desktop';
-    userAgent: string;
-    isolation?: boolean;
+    id: string
+    name: string
+    width: number
+    height: number
+    type: 'mobile' | 'tablet' | 'desktop'
+    userAgent: string
+    isolation?: boolean
     clientHints?: {
-        platform: string;
-        mobile: boolean;
-        brands: { brand: string; version: string }[];
-    };
-    x: number;
-    y: number;
-    zIndex?: number;
+        platform: string
+        mobile: boolean
+        brands?: { brand: string; version: string }[]
+    }
+    x: number
+    y: number
+    zIndex?: number
 }
 
 export interface CanvasState {
