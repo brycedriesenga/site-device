@@ -11,7 +11,7 @@ import {
     RotateCcw,
     Camera,
     Settings,
-    ChevronDown,
+
     Pencil,
     Eye,
     EyeOff
@@ -204,62 +204,77 @@ export const ContextualToolbar = track(({ onEnterAnnotationMode }: { onEnterAnno
     return (
         <>
             <TldrawUiContextualToolbar getSelectionBounds={getSelectionBounds} label="Device Actions">
-                <div ref={screenshotBtnRef}>
-                    <TldrawUiToolbarButton
-                        type="icon"
-                        title="Screenshot"
-                        onClick={toggleScreenshotMenu}
-                    >
-                        <div className="flex items-center justify-center p-1 gap-0.5">
-                            <Camera size={18} />
-                            <ChevronDown size={10} />
+                <div className="flex flex-col">
+                    {/* Header Row: Info */}
+                    <div className="flex items-center justify-center gap-2 px-3 py-1.5 border-b border-zinc-200/60 bg-zinc-50/50 rounded-t-md">
+                        <span className="text-xs font-semibold text-zinc-900 leading-tight truncate max-w-[120px]">
+                            {(shape.props as { name: string }).name}
+                        </span>
+                        <span className="text-[10px] text-zinc-500 leading-tight font-mono">
+                            {(shape.props as { w: number }).w}×{(shape.props as { h: number }).h}
+                        </span>
+                    </div>
+
+                    {/* Button Row */}
+                    <div className="flex items-center justify-center p-1">
+                        <div ref={screenshotBtnRef}>
+                            <TldrawUiToolbarButton
+                                type="icon"
+                                title="Screenshot"
+                                onClick={toggleScreenshotMenu}
+                            >
+                                <div className="flex items-center justify-center p-1 gap-0.5">
+                                    <Camera size={18} />
+                                    {/* <ChevronDown size={10} /> */}
+                                </div>
+                            </TldrawUiToolbarButton>
                         </div>
-                    </TldrawUiToolbarButton>
+
+                        <TldrawUiToolbarButton
+                            type="icon"
+                            title="Rotate"
+                            onClick={handleRotate}
+                        >
+                            <div className="flex items-center justify-center p-1">
+                                <RotateCcw size={18} />
+                            </div>
+                        </TldrawUiToolbarButton>
+
+                        <TldrawUiToolbarButton
+                            type="icon"
+                            title="Settings"
+                            onClick={() => setSettingsOpen(true)}
+                        >
+                            <div className="flex items-center justify-center p-1">
+                                <Settings size={18} />
+                            </div>
+                        </TldrawUiToolbarButton>
+
+                        {/* Divider - Vertically Center */}
+                        <div className="self-center w-px h-4 bg-zinc-200 mx-1" />
+
+                        <TldrawUiToolbarButton
+                            type="icon"
+                            title="Annotate (Focus Mode)"
+                            onClick={handleAnnotate}
+                        >
+                            <div className="flex items-center justify-center p-1">
+                                <Pencil size={18} />
+                            </div>
+                        </TldrawUiToolbarButton>
+
+                        <TldrawUiToolbarButton
+                            type="icon"
+                            title={isAnnotationVisible ? "Hide Annotations" : "Show Annotations"}
+                            onClick={handleToggleVisibility}
+                            disabled={!annotationShape}
+                        >
+                            <div className="flex items-center justify-center p-1">
+                                {isAnnotationVisible ? <Eye size={18} /> : <EyeOff size={18} />}
+                            </div>
+                        </TldrawUiToolbarButton>
+                    </div>
                 </div>
-
-                <TldrawUiToolbarButton
-                    type="icon"
-                    title="Rotate"
-                    onClick={handleRotate}
-                >
-                    <div className="flex items-center justify-center p-1">
-                        <RotateCcw size={18} />
-                    </div>
-                </TldrawUiToolbarButton>
-
-                <TldrawUiToolbarButton
-                    type="icon"
-                    title="Settings"
-                    onClick={() => setSettingsOpen(true)}
-                >
-                    <div className="flex items-center justify-center p-1">
-                        <Settings size={18} />
-                    </div>
-                </TldrawUiToolbarButton>
-
-                {/* Divider - Vertically Center */}
-                <div className="self-center w-px h-4 bg-zinc-200 mx-1" />
-
-                <TldrawUiToolbarButton
-                    type="icon"
-                    title="Annotate (Focus Mode)"
-                    onClick={handleAnnotate}
-                >
-                    <div className="flex items-center justify-center p-1">
-                        <Pencil size={18} />
-                    </div>
-                </TldrawUiToolbarButton>
-
-                <TldrawUiToolbarButton
-                    type="icon"
-                    title={isAnnotationVisible ? "Hide Annotations" : "Show Annotations"}
-                    onClick={handleToggleVisibility}
-                    disabled={!annotationShape}
-                >
-                    <div className="flex items-center justify-center p-1">
-                        {isAnnotationVisible ? <Eye size={18} /> : <EyeOff size={18} />}
-                    </div>
-                </TldrawUiToolbarButton>
             </TldrawUiContextualToolbar>
 
             {settingsOpen && createPortal(

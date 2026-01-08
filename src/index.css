@@ -9,6 +9,16 @@
   pointer-events: none !important;
 }
 
+/* Allow device shapes to show shadows outside bounds */
+.tl-shape[data-shape-type="device"] {
+  overflow: visible !important;
+  clip-path: none !important;
+}
+
+.tl-shape[data-shape-type="device"]>* {
+  overflow: visible !important;
+}
+
 .unselectable {
   user-select: none;
   -webkit-user-select: none;

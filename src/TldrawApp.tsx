@@ -3,13 +3,16 @@ import {
     Tldraw,
     type TLUiOverrides,
     type Editor,
-    type TLShape
+    type TLShape,
+    useEditor,
+    useValue
 } from 'tldraw'
 import 'tldraw/tldraw.css'
 
 // Device shape
 import { DeviceShapeUtil } from './shapes/DeviceShapeUtil'
 import type { IDeviceShape } from './shapes/DeviceShapeUtil'
+import { AnnotationContainerShapeUtil } from './shapes/AnnotationContainerShapeUtil'
 
 // Annotation shapes
 import { RectangleAnnotationShapeUtil } from './shapes/annotations/RectangleAnnotationShapeUtil'
@@ -32,6 +35,7 @@ import { loadState } from './utils/storage'
 // Register all shape utilities
 const shapeUtils = [
     DeviceShapeUtil,
+    AnnotationContainerShapeUtil,
     RectangleAnnotationShapeUtil,
     CircleAnnotationShapeUtil,
     ArrowAnnotationShapeUtil,
@@ -56,6 +60,22 @@ export default function TldrawApp() {
     const [hideStylePanel] = useState(true)
     const [recentUrls, setRecentUrls] = useState<string[]>([])
 
+    // Focus Mode Support
+    const [isFocusMode, setIsFocusMode] = useState(false)
+
+    // Bridge component to listen to store changes inside Tldraw context
+    const FocusModeListener = ({ onChange }: { onChange: (isFocus: boolean) => void }) => {
+        const editor = useEditor()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const isFocus = useValue('isFocusMode', () => (editor as any).getInstanceState().isFocusMode, [editor])
+
+        useEffect(() => {
+            onChange(isFocus)
+        }, [isFocus, onChange])
+
+        return null
+    }
+
     // Annotation Focus Mode
     const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null)
     const editingDeviceIdRef = useRef<string | null>(null)
@@ -67,6 +87,7 @@ export default function TldrawApp() {
     const components = useMemo(() => ({
         InFrontOfTheCanvas: (props: unknown) => (
             <div className="floating-ui-layer pointer-events-none absolute inset-0 overflow-hidden">
+                <FocusModeListener onChange={setIsFocusMode} />
                 <ContextualToolbar
                     {...(props as Record<string, unknown>)}
                     onEnterAnnotationMode={(deviceId: string) => {
@@ -125,10 +146,10 @@ export default function TldrawApp() {
             // Get current device shapes to update UA rules
             const shapes = editor.getCurrentPageShapes()
             const deviceShapes = shapes.filter((s): s is IDeviceShape => s.type === 'device')
-            const existingPayload = deviceShapes.map((s) => ({ 
-                id: s.id, 
-                userAgent: s.props.userAgent, 
-                isolation: true 
+            const existingPayload = deviceShapes.map((s) => ({
+                id: s.id,
+                userAgent: s.props.userAgent,
+                isolation: true
             }))
             const newDevicePayload = { id: id, userAgent: preset.ua, isolation: true }
             const allDevices = [...existingPayload, newDevicePayload]
@@ -208,16 +229,16 @@ export default function TldrawApp() {
     // Listen for messages from content scripts and other frames
     useEffect(() => {
         if (!editor) return
-        
+
         const handleMessage = (msg: { type: string; payload: Record<string, unknown> }) => {
             if (msg.type === 'REPLAY_SCROLL') {
                 const { deviceId, pixelY, docHeight } = msg.payload
                 if (!deviceId) return
-                
+
                 // Find annotation container for this device
                 const annotationId = `shape:annotation_${(deviceId as string).replace('shape:', '')}` as TLShape['id']
                 const container = editor.getShape(annotationId)
-                
+
                 if (container) {
                     editor.updateShape({
                         id: annotationId,
@@ -272,9 +293,9 @@ export default function TldrawApp() {
                 if (shape.type === 'device') {
                     const iframe = document.querySelector(`iframe[name*="${shape.id}"]`) as HTMLIFrameElement
                     if (iframe) {
-                        try { 
+                        try {
                             iframe.contentWindow?.location.reload()
-                        } catch { 
+                        } catch {
                             iframe.src = String(iframe.src)
                         }
                     }
@@ -289,7 +310,7 @@ export default function TldrawApp() {
         try {
             await new Promise((resolve, reject) => {
                 chrome.runtime.sendMessage(
-                    { type: 'CLEAR_DATA', url: activeUrl, dataType }, 
+                    { type: 'CLEAR_DATA', url: activeUrl, dataType },
                     (response) => {
                         if (chrome.runtime.lastError) reject(chrome.runtime.lastError)
                         else if (response && !response.success) reject(response.error)
@@ -298,7 +319,7 @@ export default function TldrawApp() {
                 )
             })
             console.log(`Cleared ${dataType} for ${activeUrl}`)
-        } catch (e) { 
+        } catch (e) {
             console.error(`Failed to clear ${dataType}`, e)
             alert(`Failed to clear ${dataType}: ${e}`)
         }
@@ -371,6 +392,7 @@ export default function TldrawApp() {
                 recentUrls={recentUrls}
                 annotationModeActive={!!editingDeviceId}
                 onExitAnnotationMode={handleExitAnnotationMode}
+                focusModeActive={isFocusMode}
             />
 
             <Tldraw
