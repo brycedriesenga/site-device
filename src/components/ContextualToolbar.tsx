@@ -5,7 +5,8 @@ import {
     TldrawUiToolbarButton,
     track,
     useEditor,
-    type TLShapeId
+    type TLShapeId,
+    type TLShape
 } from 'tldraw'
 import {
     RotateCcw,
@@ -106,71 +107,118 @@ export const ContextualToolbar = track(({ onEnterAnnotationMode }: { onEnterAnno
 
     // Annotation Logic
     const deviceId = shape.id
-    // ID Scheme: shape:annotation_...
-    const annotationId = `shape:annotation_${deviceId.replace('shape:', '')}` as TLShapeId
 
-    const annotationShape = editor.getShape(annotationId)
-    const isAnnotationVisible = annotationShape ? (annotationShape.opacity !== 0) : false
+
+    const getActiveAnnotationContainer = (deviceShapeId: TLShapeId, url: string) => {
+        // Look for child Frame first
+        const children = editor.getSortedChildIdsForParent(deviceShapeId)
+        const frame = children
+            .map(id => editor.getShape(id))
+            .find(s => s && s.type === 'frame')
+
+        if (!frame) return undefined
+
+        // Look for container inside frame
+        const frameChildren = editor.getSortedChildIdsForParent(frame.id)
+        const containers = frameChildren
+            .map(id => editor.getShape(id))
+            .filter((s): s is TLShape & { props: { url?: string, w: number, h: number } } => s !== undefined && s.type === 'annotation-container')
+
+        return containers.find(c => c.props.url === url)
+    }
+
+    // Determine current active container for button state
+    // We check children of the DEVICE shape now
+    const currentUrl = (shape.props as { url: string }).url || ''
+    const activeContainer = getActiveAnnotationContainer(shape.id, currentUrl)
+
+    const isAnnotationVisible = activeContainer ? (activeContainer.opacity !== 0) : false
 
     const handleAnnotate = () => {
         const devW = (shape.props as { w: number }).w
         const devH = (shape.props as { h: number }).h
-        const parent = editor.getShape(shape.parentId)
+        const devUrl = (shape.props as { url: string }).url || ''
 
-        // Define frameId consistently
-        let frameId: TLShapeId;
+        // 1. Ensure Clipping Frame Exists (Child of Device)
+        // We use a standard 'frame' shape to act as the viewport mask.
+        // It should match the device dimensions exactly.
+        const deviceChildren = editor.getSortedChildIdsForParent(shape.id)
+        const frame = deviceChildren
+            .map(id => editor.getShape(id))
+            .find(s => s && s.type === 'frame')
 
-        // 1. Check if we need to Wrap in Frame
-        if (!parent || parent.type !== 'frame') {
-            // Create Wrapper Frame at Device Position
-            frameId = `shape:frame_${deviceId.replace('shape:', '')}` as TLShapeId;
-            const x = shape.x;
-            const y = shape.y;
-
-            // Create Frame
-            editor.createShape({
-                id: frameId,
-                type: 'frame',
-                x: x,
-                y: y,
-                props: { w: devW, h: devH, name: ' ' }
-            });
-
-            // Move Device INTO Frame (Reset pos to 0,0)
-            editor.reparentShapes([deviceId], frameId);
-            editor.updateShape({ id: deviceId, type: 'device', x: 0, y: 0 });
+        let frameId: TLShapeId
+        if (frame) {
+            frameId = frame.id
+            // Ensure frame size matches device
+            if ((frame.props as { w: number }).w !== devW || (frame.props as { h: number }).h !== devH) {
+                editor.updateShape({
+                    id: frameId,
+                    type: 'frame',
+                    props: { w: devW, h: devH }
+                })
+            }
         } else {
-            // Already wrapped
-            frameId = parent.id;
-            // Sync Size
-            editor.updateShape({
+            frameId = `shape:viewport_frame_${deviceId.replace('shape:', '')}` as TLShapeId
+            editor.createShape({
                 id: frameId,
                 type: 'frame',
-                props: { w: devW, h: devH }
-            });
-        }
-
-        // 2. Ensure Annotation Container Exists (Child of Frame)
-        if (!editor.getShape(annotationId)) {
-            editor.createShape({
-                id: annotationId,
-                type: 'annotation-container',
                 x: 0,
                 y: 0,
-                parentId: frameId,
-                props: { w: devW, h: devH }
-            });
-        } else {
-            // Migration/Fix Parenting
-            const current = editor.getShape(annotationId);
-            if (current && current.parentId !== frameId) {
-                editor.reparentShapes([annotationId], frameId);
-                editor.updateShape({ id: annotationId, type: 'annotation-container', x: 0 });
-            }
+                parentId: shape.id,
+                props: { w: devW, h: devH, name: '' }, // Empty name to hide label (plus CSS)
+                // opacity: 1, // Default opacity (visible children) - CSS handles hiding frame borders
+                // isLocked: true // REMOVED: Breaks child interaction. Using Soft Lock instead.
+            })
         }
 
-        // Ensure visible
-        editor.updateShape({ id: annotationId, type: 'annotation-container', opacity: 1 })
+        // 2. Find or Create Annotation Container for this URL (Child of Clipping Frame)
+        let targetContainerId: TLShapeId
+        const frameChildren = editor.getSortedChildIdsForParent(frameId)
+        const containers = frameChildren
+            .map(id => editor.getShape(id))
+            .filter((s): s is TLShape & { props: { url?: string } } => s !== undefined && s.type === 'annotation-container')
+
+        const existingContainer = containers.find(c => c.props.url === devUrl)
+
+        // Hide all OTHER containers for this device (inside the frame)
+        const updates: TLShape[] = []
+        containers.forEach(c => {
+            if (c.props.url !== devUrl && c.opacity !== 0) {
+                updates.push({ ...c, opacity: 0 } as TLShape)
+            }
+        })
+
+        if (existingContainer) {
+            targetContainerId = existingContainer.id
+            if (existingContainer.opacity !== 1) {
+                updates.push({ ...existingContainer, opacity: 1 } as TLShape)
+            }
+            // Ensure size sync (width only, height depends on doc)
+            if ((existingContainer.props as { w: number }).w !== devW) {
+                updates.push({
+                    ...existingContainer,
+                    props: { ...existingContainer.props, w: devW }
+                } as TLShape)
+            }
+        } else {
+            // Create new container inside the Frame
+            const suffix = Math.random().toString(36).substring(2, 9)
+            targetContainerId = `shape:annotation_${deviceId.replace('shape:', '')}_${suffix}` as TLShapeId
+
+            editor.createShape({
+                id: targetContainerId,
+                type: 'annotation-container',
+                x: 0,
+                y: 0, // Starts at top
+                parentId: frameId, // Parent to Frame!
+                props: { w: devW, h: devH, url: devUrl }
+            })
+        }
+
+        if (updates.length > 0) {
+            editor.updateShapes(updates)
+        }
 
         // Remove the temporary "Clipping Frame" (old method) if it exists
         const oldClipId = `shape:clip_${deviceId.replace('shape:', '')}` as TLShapeId
@@ -180,23 +228,23 @@ export const ContextualToolbar = track(({ onEnterAnnotationMode }: { onEnterAnno
 
         // Enter Focus Mode
         if (onEnterAnnotationMode) {
-            onEnterAnnotationMode(shape.id, annotationId)
+            onEnterAnnotationMode(shape.id, targetContainerId)
         }
 
-        editor.setSelectedShapes([annotationId])
+        editor.setSelectedShapes([targetContainerId])
         editor.setCurrentTool('draw')
     }
 
     const handleToggleVisibility = () => {
-        if (!annotationShape) return;
+        if (!activeContainer) return;
         const newOpacity = isAnnotationVisible ? 0 : 1;
         editor.updateShape({
-            id: annotationId,
+            id: activeContainer.id,
             type: 'annotation-container',
             opacity: newOpacity
         });
 
-        if (newOpacity === 0 && editor.getSelectedShapeIds().includes(annotationId)) {
+        if (newOpacity === 0 && editor.getSelectedShapeIds().includes(activeContainer.id)) {
             editor.selectNone();
         }
     };
@@ -267,7 +315,7 @@ export const ContextualToolbar = track(({ onEnterAnnotationMode }: { onEnterAnno
                             type="icon"
                             title={isAnnotationVisible ? "Hide Annotations" : "Show Annotations"}
                             onClick={handleToggleVisibility}
-                            disabled={!annotationShape}
+                            disabled={!activeContainer}
                         >
                             <div className="flex items-center justify-center p-1">
                                 {isAnnotationVisible ? <Eye size={18} /> : <EyeOff size={18} />}

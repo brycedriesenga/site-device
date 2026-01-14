@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* Hide style panel when no selection (controled by .hide-style-panel class on container) */
-.hide-style-panel .tlui-style-panel {
+.hide-style-panel:not(.annotation-mode) .tlui-style-panel {
   display: none !important;
   opacity: 0 !important;
   pointer-events: none !important;

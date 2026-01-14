@@ -32,9 +32,14 @@ export class DeviceMessageBridge {
      * Send message to background script
      */
     sendToBackground(type: string, payload: MessagePayload): void {
+        // Automatically inject deviceId into payload for tracking context
+        const contextPayload = (typeof payload === 'object' && payload !== null)
+            ? { ...payload, deviceId: this.deviceId }
+            : payload
+
         chrome.runtime.sendMessage({
             type,
-            payload,
+            payload: contextPayload,
             sourceDeviceId: this.deviceId
         }).catch(e => {
             console.error(`[Bridge] Failed to send message: ${type}`, e)
@@ -48,6 +53,10 @@ export class DeviceMessageBridge {
         const tab = await chrome.tabs.getCurrent()
         if (!tab?.id) return
 
+        const contextPayload = (typeof payload === 'object' && payload !== null)
+            ? { ...payload, deviceId: this.deviceId }
+            : payload
+
         chrome.webNavigation.getAllFrames({ tabId: tab.id }, (frames) => {
             frames?.forEach(frame => {
                 if (frame.frameId === 0) return // Skip main frame
@@ -56,7 +65,7 @@ export class DeviceMessageBridge {
                     tab.id!,
                     {
                         type,
-                        payload,
+                        payload: contextPayload,
                         sourceDeviceId: this.deviceId
                     },
                     { frameId: frame.frameId }
@@ -71,6 +80,7 @@ export class DeviceMessageBridge {
      * Broadcast to both background and peers
      */
     async broadcast(type: string, payload: MessagePayload): Promise<void> {
+        // Enriched payload will be created in individual methods
         this.sendToBackground(type, payload)
         await this.sendToPeers(type, payload)
     }

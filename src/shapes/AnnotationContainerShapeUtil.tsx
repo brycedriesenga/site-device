@@ -14,6 +14,7 @@ export type IAnnotationContainerShape = TLBaseShape<
     {
         w: number
         h: number
+        url?: string
     }
 >
 
@@ -22,12 +23,22 @@ export class AnnotationContainerShapeUtil extends BaseBoxShapeUtil<IAnnotationCo
     static override props: RecordProps<IAnnotationContainerShape> = {
         w: T.number,
         h: T.number,
+        url: T.string.optional(),
     }
+
+    // Prevent direct selection of the container - it is just a structural grouping
+    override canBind = () => false
+    override canSnap = () => false
+    override hideSelectionBoundsBg = () => true
+    override hideSelectionBoundsFg = () => true
+    override hideRotateHandle = () => true
+    override hideResizeHandles = () => true
 
     override getDefaultProps(): IAnnotationContainerShape['props'] {
         return {
             w: 100,
             h: 100,
+            url: '',
         }
     }
 
@@ -42,17 +53,17 @@ export class AnnotationContainerShapeUtil extends BaseBoxShapeUtil<IAnnotationCo
     override component(_shape: IAnnotationContainerShape) {
         return (
             <HTMLContainer style={{ pointerEvents: 'none' }}>
-                {/* Transparent container for annotations */}
+                {/* Transparent container for annotations - Pass clicks through */}
                 <div style={{
                     width: '100%',
                     height: '100%',
-                    // border: '1px dashed rgba(0,0,0,0.1)', // Helpful for debugging
+                    pointerEvents: 'none'
                 }} />
             </HTMLContainer>
         )
     }
 
-    override indicator(shape: IAnnotationContainerShape) {
-        return <rect width={shape.props.w} height={shape.props.h} />
+    override indicator(_shape: IAnnotationContainerShape) {
+        return null
     }
 }
