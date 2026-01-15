@@ -60,18 +60,18 @@ export default function TldrawApp() {
     const [hideStylePanel] = useState(true)
     const [recentUrls, setRecentUrls] = useState<string[]>([])
 
-    // Annotation Mode Support
-    const [isAnnotationMode, setIsAnnotationMode] = useState(false)
+    // Focus Mode Support (tldraw's built-in focus mode - should not be changed)
+    const [isFocusMode, setIsFocusMode] = useState(false)
 
     // Bridge component to listen to store changes inside Tldraw context
-    const AnnotationModeListener = ({ onChange }: { onChange: (isAnnotation: boolean) => void }) => {
+    const FocusModeListener = ({ onChange }: { onChange: (isFocus: boolean) => void }) => {
         const editor = useEditor()
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const isAnnotation = useValue('isAnnotationMode', () => (editor as any).getInstanceState().isAnnotationMode, [editor])
+        const isFocus = useValue('isFocusMode', () => (editor as any).getInstanceState().isFocusMode, [editor])
 
         useEffect(() => {
-            onChange(isAnnotation)
-        }, [isAnnotation, onChange])
+            onChange(isFocus)
+        }, [isFocus, onChange])
 
         return null
     }
@@ -87,7 +87,7 @@ export default function TldrawApp() {
     const components = useMemo(() => ({
         InFrontOfTheCanvas: (props: unknown) => (
             <div className="floating-ui-layer pointer-events-none absolute inset-0 overflow-hidden">
-                <AnnotationModeListener onChange={setIsAnnotationMode} />
+                <FocusModeListener onChange={setIsFocusMode} />
                 <ContextualToolbar
                     {...(props as Record<string, unknown>)}
                     onEnterAnnotationMode={(deviceId: string) => {
@@ -644,7 +644,8 @@ export default function TldrawApp() {
                 onBack={handleBack}
                 onForward={handleForward}
                 recentUrls={recentUrls}
-                annotationModeActive={!!editingDeviceId || isAnnotationMode}
+                annotationModeActive={!!editingDeviceId}
+                focusModeActive={isFocusMode}
                 onExitAnnotationMode={handleExitAnnotationMode}
             />
 

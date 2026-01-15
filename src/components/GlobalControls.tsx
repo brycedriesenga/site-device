@@ -16,6 +16,7 @@ interface GlobalControlsProps {
     // New prop for banner support
     annotationModeActive?: boolean;
     onExitAnnotationMode?: () => void;
+    focusModeActive?: boolean;
 }
 
 export const GlobalControls: React.FC<GlobalControlsProps> = ({
@@ -29,7 +30,8 @@ export const GlobalControls: React.FC<GlobalControlsProps> = ({
     onForward,
     recentUrls = [],
     annotationModeActive,
-    onExitAnnotationMode
+    onExitAnnotationMode,
+    focusModeActive
 }) => {
     const [inputUrl, setInputUrl] = useState(url);
 
@@ -49,7 +51,7 @@ export const GlobalControls: React.FC<GlobalControlsProps> = ({
     return (
         <div className="global-controls absolute top-4 left-1/2 -translate-x-1/2 z-[3000] flex flex-col gap-2 items-center pointer-events-none">
             {/* Main Bar */}
-            {!annotationModeActive && (
+            {(!annotationModeActive && !focusModeActive) && (
                 <div className={`bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl p-2 flex items-center gap-2 pointer-events-auto transition-opacity ${annotationModeActive ? 'opacity-50 hover:opacity-100' : 'opacity-100'}`}>
 
                     {/* ID: Navigation Controls */}

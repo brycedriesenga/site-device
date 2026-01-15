@@ -10,11 +10,11 @@ export function VerticalToolbar() {
     const isTabletSelected = useIsToolSelected(tools['tool-tablet']);
     const isDesktopSelected = useIsToolSelected(tools['tool-desktop']);
 
-    // Check for Annotation Mode
+    // Check for Focus Mode (tldraw's built-in focus mode)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const isAnnotationMode = useValue('isAnnotationMode', () => (editor as any).getInstanceState().isAnnotationMode, [editor]);
+    const isFocusMode = useValue('isFocusMode', () => (editor as any).getInstanceState().isFocusMode, [editor]);
 
-    if (isAnnotationMode) return null;
+    if (isFocusMode) return null;
 
     const handleSelectTool = (id: string) => {
         editor.setCurrentTool(id);
