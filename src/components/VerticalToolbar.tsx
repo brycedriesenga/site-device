@@ -10,11 +10,11 @@ export function VerticalToolbar() {
     const isTabletSelected = useIsToolSelected(tools['tool-tablet']);
     const isDesktopSelected = useIsToolSelected(tools['tool-desktop']);
 
-    // Check for Focus Mode
+    // Check for Annotation Mode
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const isFocusMode = useValue('isFocusMode', () => (editor as any).getInstanceState().isFocusMode, [editor]);
+    const isAnnotationMode = useValue('isAnnotationMode', () => (editor as any).getInstanceState().isAnnotationMode, [editor]);
 
-    if (isFocusMode) return null;
+    if (isAnnotationMode) return null;
 
     const handleSelectTool = (id: string) => {
         editor.setCurrentTool(id);

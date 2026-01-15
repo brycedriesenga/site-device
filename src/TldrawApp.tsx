@@ -60,23 +60,23 @@ export default function TldrawApp() {
     const [hideStylePanel] = useState(true)
     const [recentUrls, setRecentUrls] = useState<string[]>([])
 
-    // Focus Mode Support
-    const [isFocusMode, setIsFocusMode] = useState(false)
+    // Annotation Mode Support
+    const [isAnnotationMode, setIsAnnotationMode] = useState(false)
 
     // Bridge component to listen to store changes inside Tldraw context
-    const FocusModeListener = ({ onChange }: { onChange: (isFocus: boolean) => void }) => {
+    const AnnotationModeListener = ({ onChange }: { onChange: (isAnnotation: boolean) => void }) => {
         const editor = useEditor()
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const isFocus = useValue('isFocusMode', () => (editor as any).getInstanceState().isFocusMode, [editor])
+        const isAnnotation = useValue('isAnnotationMode', () => (editor as any).getInstanceState().isAnnotationMode, [editor])
 
         useEffect(() => {
-            onChange(isFocus)
-        }, [isFocus, onChange])
+            onChange(isAnnotation)
+        }, [isAnnotation, onChange])
 
         return null
     }
 
-    // Annotation Focus Mode
+    // Annotation Mode
     const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null)
     const editingDeviceIdRef = useRef<string | null>(null)
 
@@ -87,7 +87,7 @@ export default function TldrawApp() {
     const components = useMemo(() => ({
         InFrontOfTheCanvas: (props: unknown) => (
             <div className="floating-ui-layer pointer-events-none absolute inset-0 overflow-hidden">
-                <FocusModeListener onChange={setIsFocusMode} />
+                <AnnotationModeListener onChange={setIsAnnotationMode} />
                 <ContextualToolbar
                     {...(props as Record<string, unknown>)}
                     onEnterAnnotationMode={(deviceId: string) => {
@@ -644,9 +644,8 @@ export default function TldrawApp() {
                 onBack={handleBack}
                 onForward={handleForward}
                 recentUrls={recentUrls}
-                annotationModeActive={!!editingDeviceId}
+                annotationModeActive={!!editingDeviceId || isAnnotationMode}
                 onExitAnnotationMode={handleExitAnnotationMode}
-                focusModeActive={isFocusMode}
             />
 
             <Tldraw

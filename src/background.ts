@@ -71,7 +71,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const devices = msg.devices;
 
         // 1. Calculate new rules
-        const newRules: chrome.declarativeNetRequest.Rule[] = devices.map((device: any, index: number) => {
+        interface DeviceConfig {
+            id: string;
+            userAgent: string;
+            isolation: boolean;
+        }
+        const newRules: chrome.declarativeNetRequest.Rule[] = devices.map((device: DeviceConfig, index: number) => {
             return {
                 id: 1000 + index,
                 priority: 1,
@@ -135,14 +140,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
             // 3. Update Dynamic Rules
             chrome.declarativeNetRequest.updateDynamicRules({
-                removeRuleIds: removeRuleIds,
-                addRules: newRules
+               removeRuleIds: removeRuleIds,
+               addRules: newRules
             }, () => {
-                if (chrome.runtime.lastError) {
-                    console.error("DNR Error:", chrome.runtime.lastError);
-                } else {
-                    console.log(`Updated UA Rules: Removed ${removeRuleIds.length}, Added ${newRules.length}`);
-                }
+               if (chrome.runtime.lastError) {
+                   console.error("DNR Error:", chrome.runtime.lastError);
+               } else {
+                   // This message is normal and expected - UA rules are updated whenever device configuration changes
+                   // to ensure proper user-agent spoofing and isolation for each device iframe
+                   console.log(`Updated UA Rules: Removed ${removeRuleIds.length}, Added ${newRules.length}`);
+               }
             });
         });
     } else if (msg.type === 'CLEAR_DATA') {
@@ -179,9 +186,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             });
 
             return true; // Keep channel open
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error("Invalid URL:", url);
-            sendResponse({ success: false, error: e.message });
+            sendResponse({ success: false, error: e instanceof Error ? e.message : String(e) });
         }
     }
 });
