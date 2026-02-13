@@ -31,7 +31,6 @@ export class DeviceScreenshotter {
     private editor: Editor
 
     private readonly SAFETY_MARGIN = 40
-    private readonly RENDER_WAIT = 600
     private readonly UI_HIDE_WAIT = 200
     private readonly SAVE_DEBOUNCE = 500
 
@@ -51,6 +50,7 @@ export class DeviceScreenshotter {
 
         const originalCamera = { ...this.editor.getCamera() }
         const selectedIds = this.editor.getSelectedShapeIds()
+        const originalZoom = originalCamera.z
 
         const session: Omit<CaptureSession, 'ctx'> = {
             canvas: document.createElement('canvas'),
@@ -107,7 +107,7 @@ export class DeviceScreenshotter {
                 deviceX: bounds.x,
                 deviceY: bounds.y,
                 deviceW,
-            })
+            }, originalZoom)
 
             const fileName = `${(shapeAfterPrep.props as { name: string }).name}-${options.type}.png`
             this.downloadImage(fullSession.canvas, fileName)
@@ -134,7 +134,8 @@ export class DeviceScreenshotter {
      */
     private async captureTiles(
         session: CaptureSession,
-        device: { deviceId: TLShapeId; deviceX: number; deviceY: number; deviceW: number }
+        device: { deviceId: TLShapeId; deviceX: number; deviceY: number; deviceW: number },
+        originalZoom: number
     ): Promise<void> {
         const grid = this.getTileGrid(session, device.deviceW)
 
@@ -144,7 +145,7 @@ export class DeviceScreenshotter {
 
         for (let row = 0; row < grid.rows; row++) {
             for (let col = 0; col < grid.cols; col++) {
-                await this.captureTile(session, device, grid, { row, col })
+                await this.captureTile(session, device, grid, { row, col }, originalZoom)
             }
         }
     }
@@ -179,7 +180,8 @@ export class DeviceScreenshotter {
         session: CaptureSession,
         device: { deviceId: TLShapeId; deviceX: number; deviceY: number; deviceW: number },
         grid: TileGrid,
-        tile: { row: number; col: number }
+        tile: { row: number; col: number },
+        originalZoom: number
     ): Promise<void> {
         const { row, col } = tile
 
@@ -187,11 +189,13 @@ export class DeviceScreenshotter {
         const offY = row * grid.tileWorldH
 
         // Camera translation: place the top-left of this tile at (captureX, captureY) in screen space.
-        const camX = grid.captureX / session.scaleFactor - (device.deviceX + offX)
-        const camY = grid.captureY / session.scaleFactor - (device.deviceY + offY)
+        // CRITICAL FIX: SAFETY_MARGIN is in screen pixels, don't divide by scaleFactor
+        // Formula: screen = (world - camera) * zoom  =>  camera = world - screen/zoom
+        const camX = device.deviceX + offX - grid.captureX / session.scaleFactor
+        const camY = device.deviceY + offY - grid.captureY / session.scaleFactor
 
         this.editor.setCamera({ x: camX, y: camY, z: session.scaleFactor })
-        await this.wait(this.RENDER_WAIT)
+        await this.waitForRender()
 
         const dataUrl = await this.captureTabImage()
         if (!dataUrl) {
@@ -243,6 +247,9 @@ export class DeviceScreenshotter {
         )
 
         console.log(`[Screenshot] Captured tile ${row},${col}`)
+        
+        // Restore original zoom before next tile to maintain consistent camera state
+        this.editor.setCamera({ x: camX, y: camY, z: originalZoom })
     }
 
     /**
@@ -340,5 +347,20 @@ export class DeviceScreenshotter {
      */
     private wait(ms: number): Promise<void> {
         return new Promise((resolve) => setTimeout(resolve, ms))
+    }
+
+    /**
+     * Wait for render completion using double requestAnimationFrame.
+     * This ensures the browser has finished painting before proceeding.
+     */
+    private waitForRender(): Promise<void> {
+        return new Promise((resolve) => {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    // Add a small additional delay to ensure Chrome extension APIs are ready
+                    setTimeout(resolve, 100)
+                })
+            })
+        })
     }
 }

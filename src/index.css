@@ -15,7 +15,7 @@
   clip-path: none !important;
 }
 
-.tl-shape[data-shape-type="device"]>* {
+.tl-shape[data-shape-type="device"]>*>* {
   overflow: visible !important;
 }
 
@@ -24,22 +24,28 @@
   -webkit-user-select: none;
 }
 
-/* Screenshot Utilities */
+/* Screenshot Utilities - Only hide UI chrome, not device content */
 body.screenshot-mode .device-header,
 body.screenshot-mode .global-controls,
-body.screenshot-mode [class*="tl-ui"],
-body.screenshot-mode [class*="tlui-"],
-body.screenshot-mode .tldraw__ui,
-body.screenshot-mode .tl-overlays,
+body.screenshot-mode .tlui-layout,
+body.screenshot-mode .tlui-toolbar,
+body.screenshot-mode .tlui-style-panel,
+body.screenshot-mode .tlui-debug-panel,
+body.screenshot-mode .tlui-menu,
+body.screenshot-mode .tlui-context-menu,
 body.screenshot-mode .tlui-toast-container,
 body.screenshot-mode .tl-watermark_SEE-LICENSE,
-body.screenshot-mode [data-testid="tl-watermark-unlicensed"] {
+body.screenshot-mode [data-testid="tl-watermark-unlicensed"],
+body.screenshot-mode .floating-ui-layer,
+body.screenshot-mode .vertical-toolbar,
+body.screenshot-mode .contextual-toolbar,
+body.screenshot-mode .focus-overlay {
   visibility: hidden !important;
   opacity: 0 !important;
-  display: none !important;
   pointer-events: none !important;
 }
 
+/* Remove decorative frame styling for clean screenshots */
 body.screenshot-mode .device-frame {
   border: none !important;
   box-shadow: none !important;
@@ -95,6 +101,30 @@ body,
   fill: transparent !important;
 }
 
+/* 
+ * CRITICAL: Viewport frames (annotation mode) must not block device selection
+ * When annotation mode is active, frames are created as children of devices.
+ * We need to ensure:
+ * 1. The frame itself doesn't intercept pointer events meant for the device
+ * 2. Annotations inside the frame CAN receive pointer events
+ * 3. The device's click shield works correctly
+ */
+
+/* Frame containers should pass clicks through to parent device */
+.tl-shape[data-shape-type="frame"] {
+  pointer-events: none !important;
+}
+
+/* Frame children (annotations) should receive clicks */
+.tl-shape[data-shape-type="frame"] .tl-shape {
+  pointer-events: auto !important;
+}
+
+/* Annotation containers specifically pass clicks through */
+.tl-shape[data-shape-type="annotation-container"] {
+  pointer-events: none !important;
+}
+
 /* Z-Index Fixes */
 .tlui-layout {
   z-index: 10000 !important;
@@ -102,12 +132,4 @@ body,
 
 .tl-ui-layer {
   z-index: 10000 !important;
-}
-
-/* Hide UI in screenshot mode */
-body.screenshot-mode .tlui-layout,
-body.screenshot-mode .tl-ui-layer,
-body.screenshot-mode .floating-ui-layer,
-body.screenshot-mode .vertical-toolbar {
-  display: none !important;
 }

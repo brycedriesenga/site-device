@@ -166,10 +166,15 @@ export const ContextualToolbar = track(({ onEnterAnnotationMode }: { onEnterAnno
                 x: 0,
                 y: 0,
                 parentId: shape.id,
-                props: { w: devW, h: devH, name: '' }, // Empty name to hide label (plus CSS)
-                // opacity: 1, // Default opacity (visible children) - CSS handles hiding frame borders
-                // isLocked: true // REMOVED: Breaks child interaction. Using Soft Lock instead.
+                props: { 
+                    w: devW, 
+                    h: devH, 
+                    name: ''
+                }
             })
+            // Mark the frame as locked so it doesn't intercept clicks/selection
+            // This is safe because annotations are children and can still be interacted with
+            editor.toggleLock([frameId])
         }
 
         // 2. Find or Create Annotation Container for this URL (Child of Clipping Frame)

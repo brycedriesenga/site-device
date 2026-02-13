@@ -2,7 +2,8 @@ import { useRef, useMemo, useEffect, useState, memo, lazy, Suspense } from 'reac
 import type {
     TLUiOverrides,
     Editor,
-    TLShape
+    TLShape,
+    TLShapeId
 } from 'tldraw'
 import { useEditor, useValue } from 'tldraw'
 import 'tldraw/tldraw.css'
@@ -616,11 +617,17 @@ export default function TldrawApp() {
     }
 
     const handleExitAnnotationMode = () => {
+        const deviceId = editingDeviceId
         setEditingDeviceId(null)
         editingDeviceIdRef.current = null
         if (editor) {
-            editor.selectNone()
             editor.setCurrentTool('select')
+            // Select the device that was being annotated so it's immediately draggable
+            if (deviceId) {
+                editor.setSelectedShapes([deviceId as TLShapeId])
+            } else {
+                editor.selectNone()
+            }
         }
     }
 
