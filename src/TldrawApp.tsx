@@ -410,7 +410,7 @@ export default function TldrawApp() {
 
                 // Search priority: Frame Child -> Direct Child
                 let targetContainer: TLShape | undefined
-                const frame = deviceChildren.find(s => s.type === 'frame')
+                const frame = deviceChildren.find(s => s.type === 'viewport-frame')
                 if (frame) {
                     const frameChildrenIds = editor.getSortedChildIdsForParent(frame.id)
                     targetContainer = frameChildrenIds
@@ -437,7 +437,7 @@ export default function TldrawApp() {
                     // Ignore the Frame (parent of container) to prevent cycles
                     if (frame && shape.id === frame.id) return
                     // specific: ignore any frame to be safe? 
-                    if (shape.type === 'frame') return
+                    if (shape.type === 'frame' || shape.type === 'viewport-frame') return
 
                     // Ignore if already parented correctly
                     if (shape.parentId === targetContainer!.id) return
