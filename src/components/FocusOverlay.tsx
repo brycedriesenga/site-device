@@ -1,7 +1,5 @@
-import { useEditor, track } from 'tldraw';
-import type { TLShapeId } from 'tldraw';
-// @ts-ignore
-import React from 'react';
+import { useEditor, track } from 'tldraw'
+import type { TLShapeId } from 'tldraw'
 
 export const FocusOverlay = track(({ focusedDeviceId }: { focusedDeviceId: string | null }) => {
     const editor = useEditor();

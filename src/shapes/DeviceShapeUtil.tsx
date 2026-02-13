@@ -3,6 +3,7 @@ import {
     Geometry2d,
     HTMLContainer,
     type RecordProps,
+    type TLResizeInfo,
     Rectangle2d,
     T,
     type TLBaseShape,
@@ -12,7 +13,6 @@ import {
 } from 'tldraw'
 import { useState, useEffect } from 'react'
 
-
 export type IDeviceShape = TLBaseShape<
     'device',
     {
@@ -20,9 +20,14 @@ export type IDeviceShape = TLBaseShape<
         h: number
         url: string
         name: string
-        deviceType: string // 'mobile' | 'tablet' | 'desktop'
+        deviceType: 'mobile' | 'tablet' | 'desktop'
         userAgent: string
         pixelRatio: number
+        clientHints?: {
+            platform: string
+            mobile: boolean
+            brands?: { brand: string; version: string }[]
+        }
     }
 >
 
@@ -33,9 +38,9 @@ export class DeviceShapeUtil extends BaseBoxShapeUtil<IDeviceShape> {
         h: T.number,
         url: T.string,
         name: T.string,
-        deviceType: T.string,
+        deviceType: T.literalEnum('mobile', 'tablet', 'desktop'),
         userAgent: T.string,
-        pixelRatio: T.number,
+        pixelRatio: T.number
     }
 
     override getDefaultProps(): IDeviceShape['props'] {
@@ -58,24 +63,29 @@ export class DeviceShapeUtil extends BaseBoxShapeUtil<IDeviceShape> {
         })
     }
 
+    // Simple resizing with no constraints - full user flexibility
+    override onResize = (shape: IDeviceShape, info: TLResizeInfo<IDeviceShape>) => {
+        return resizeBox(shape, info)
+    }
+
     override component(shape: IDeviceShape) {
+        /* eslint-disable react-hooks/rules-of-hooks */
         const { w, h, url, name, userAgent, deviceType } = shape.props
         const editor = useEditor()
         const isSelected = useValue('isSelected', () => editor.getSelectedShapeIds().includes(shape.id), [editor, shape.id])
 
-        // Loading State
-        const [isLoading, setIsLoading] = useState(true);
+        const [isLoading, setIsLoading] = useState(true)
 
-        // Reset loading when URL changes (or if empty)
         useEffect(() => {
-            if (url) setIsLoading(true);
-        }, [url]);
+            if (url) setIsLoading(true)
+        }, [url])
+        /* eslint-enable react-hooks/rules-of-hooks */
 
-        // Construct Isolation Config
+        // Build iframe config
         const sdConf = {
             id: shape.id,
             ua: userAgent,
-            ch: {}, // TODO: Add client hints support
+            ch: shape.props.clientHints || {},
             type: deviceType,
             w: w,
             h: h
@@ -83,48 +93,56 @@ export class DeviceShapeUtil extends BaseBoxShapeUtil<IDeviceShape> {
         const iframeName = `SD_CONF:${JSON.stringify(sdConf)}`
 
         return (
-            <HTMLContainer style={{ pointerEvents: 'all' }}>
-                <div style={{ width: '100%', height: '100%', pointerEvents: 'none', display: 'flex', flexDirection: 'column' }}>
-                    <div className="device-frame w-full h-full bg-white border border-gray-200 flex flex-col overflow-hidden relative shadow-sm rounded-lg">
+            <HTMLContainer style={{ pointerEvents: 'all', overflow: 'visible' }}>
+                <div style={{ width: '100%', height: '100%', pointerEvents: 'none', display: 'flex', flexDirection: 'column', overflow: 'visible' }}>
+                    {/* Outer wrapper for Shadow + Radius (No Overflow Hidden) */}
+                    <div className={`device-frame w-full h-full relative rounded-lg transition-all shadow-lg ${isSelected ? 'shadow-2xl' : ''}`}>
 
-                        {!isSelected && (
-                            <div
-                                className="absolute inset-0 z-50 bg-transparent"
-                                style={{ pointerEvents: 'all' }}
-                            />
-                        )}
-
-                        <div className="flex-1 bg-white relative">
-                            {url ? (
-                                <>
-                                    {isLoading && (
-                                        <div className="absolute inset-0 flex items-center justify-center bg-zinc-50 z-20">
-                                            <div className="flex flex-col items-center gap-2">
-                                                <div className="animate-spin rounded-full h-6 w-6 border-2 border-zinc-200 border-b-blue-500" />
-                                                <span className="text-xs text-zinc-400 font-medium">Loading...</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    <iframe
-                                        // Removed key={url} to prevent infinite Loop on sync
-                                        src={(function () {
-                                            try {
-                                                const u = new URL(url);
-                                                u.searchParams.set('__sd_id', shape.id);
-                                                return u.toString();
-                                            } catch (e) { return url; }
-                                        })()}
-                                        onLoad={() => setIsLoading(false)}
-                                        className="w-full h-full border-none pointer-events-auto"
-                                        title={name}
-                                        name={iframeName}
-                                    />
-                                </>
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center text-zinc-300 text-sm">
-                                    No URL
-                                </div>
+                        {/* Inner content for Overflow Hidden + Background */}
+                        <div className="w-full h-full bg-white flex flex-col overflow-hidden relative rounded-lg">
+                            {/* Click shield for unselected state */}
+                            {!isSelected && (
+                                <div
+                                    className="absolute inset-0 z-50 bg-transparent"
+                                    style={{ pointerEvents: 'all' }}
+                                />
                             )}
+
+                            {/* Iframe container */}
+                            <div className="flex-1 bg-white relative overflow-hidden">
+                                {url ? (
+                                    <>
+                                        {isLoading && (
+                                            <div className="absolute inset-0 flex items-center justify-center bg-zinc-50 z-20">
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <div className="animate-spin rounded-full h-6 w-6 border-2 border-zinc-200 border-b-blue-500" />
+                                                    <span className="text-xs text-zinc-400 font-medium">Loading...</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                        <iframe
+                                            src={(function () {
+                                                try {
+                                                    const u = new URL(url)
+                                                    u.searchParams.set('__sd_id', shape.id)
+                                                    return u.toString()
+                                                } catch {
+                                                    return url
+                                                }
+                                            })()}
+                                            onLoad={() => setIsLoading(false)}
+                                            className="w-full h-full border-none pointer-events-auto"
+                                            title={name}
+                                            name={iframeName}
+                                            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
+                                        />
+                                    </>
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-zinc-300 text-sm">
+                                        No URL loaded
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -134,10 +152,5 @@ export class DeviceShapeUtil extends BaseBoxShapeUtil<IDeviceShape> {
 
     override indicator(shape: IDeviceShape) {
         return <rect width={shape.props.w} height={shape.props.h} />
-    }
-
-    // Allow resizing
-    override onResize = (shape: IDeviceShape, info: any) => {
-        return resizeBox(shape, info)
     }
 }

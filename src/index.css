@@ -3,10 +3,20 @@
 @tailwind utilities;
 
 /* Hide style panel when no selection (controled by .hide-style-panel class on container) */
-.hide-style-panel .tlui-style-panel {
+.hide-style-panel:not(.annotation-mode) .tlui-style-panel {
   display: none !important;
   opacity: 0 !important;
   pointer-events: none !important;
+}
+
+/* Allow device shapes to show shadows outside bounds */
+.tl-shape[data-shape-type="device"] {
+  overflow: visible !important;
+  clip-path: none !important;
+}
+
+.tl-shape[data-shape-type="device"]>* {
+  overflow: visible !important;
 }
 
 .unselectable {
@@ -73,4 +83,31 @@ body,
   background-color: #0f172a;
   /* slate-900 */
   color: white;
+}
+
+/* TLDraw Customizations */
+.tl-frame-heading {
+  display: none !important;
+}
+
+.tl-frame__body {
+  stroke: transparent !important;
+  fill: transparent !important;
+}
+
+/* Z-Index Fixes */
+.tlui-layout {
+  z-index: 10000 !important;
+}
+
+.tl-ui-layer {
+  z-index: 10000 !important;
+}
+
+/* Hide UI in screenshot mode */
+body.screenshot-mode .tlui-layout,
+body.screenshot-mode .tl-ui-layer,
+body.screenshot-mode .floating-ui-layer,
+body.screenshot-mode .vertical-toolbar {
+  display: none !important;
 }

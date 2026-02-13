@@ -1,4 +1,4 @@
-import { useTools, useIsToolSelected, useEditor } from 'tldraw';
+import { useTools, useIsToolSelected, useEditor, useValue } from 'tldraw';
 import { Smartphone, Tablet, Monitor } from 'lucide-react';
 
 export function VerticalToolbar() {
@@ -9,6 +9,12 @@ export function VerticalToolbar() {
     const isMobileSelected = useIsToolSelected(tools['tool-mobile']);
     const isTabletSelected = useIsToolSelected(tools['tool-tablet']);
     const isDesktopSelected = useIsToolSelected(tools['tool-desktop']);
+
+    // Check for Focus Mode
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const isFocusMode = useValue('isFocusMode', () => (editor as any).getInstanceState().isFocusMode, [editor]);
+
+    if (isFocusMode) return null;
 
     const handleSelectTool = (id: string) => {
         editor.setCurrentTool(id);
