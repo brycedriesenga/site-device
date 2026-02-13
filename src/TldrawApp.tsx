@@ -1,13 +1,14 @@
-import { useRef, useMemo, useEffect, useState } from 'react'
-import {
-    Tldraw,
-    type TLUiOverrides,
-    type Editor,
-    type TLShape,
-    useEditor,
-    useValue
+import { useRef, useMemo, useEffect, useState, memo, lazy, Suspense } from 'react'
+import type {
+    TLUiOverrides,
+    Editor,
+    TLShape
 } from 'tldraw'
+import { useEditor, useValue } from 'tldraw'
 import 'tldraw/tldraw.css'
+
+// Lazy load Tldraw component for better initial load performance
+const Tldraw = lazy(() => import('tldraw').then(m => ({ default: m.Tldraw })))
 
 // Device shape
 import { DeviceShapeUtil } from './shapes/DeviceShapeUtil'
@@ -46,6 +47,32 @@ const shapeUtils = [
 // Register custom tools
 const customTools = [MobileTool, TabletTool, DesktopTool]
 
+// Simple debounce utility for performance optimization
+function debounce<T extends (...args: Parameters<T>) => ReturnType<T>>(
+    fn: T,
+    delay: number
+): (...args: Parameters<T>) => void {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+    return (...args: Parameters<T>) => {
+        if (timeoutId) clearTimeout(timeoutId)
+        timeoutId = setTimeout(() => fn(...args), delay)
+    }
+}
+
+// Bridge component to listen to store changes inside Tldraw context
+// Extracted and memoized to prevent re-creation on every render
+const FocusModeListener = memo(({ onChange }: { onChange: (isFocus: boolean) => void }) => {
+    const editor = useEditor()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const isFocus = useValue('isFocusMode', () => (editor as any).getInstanceState().isFocusMode, [editor])
+
+    useEffect(() => {
+        onChange(isFocus)
+    }, [isFocus, onChange])
+
+    return null
+})
+
 // Preset definitions
 const PRESETS = {
     mobile: { w: 393, h: 852, name: 'Mobile', ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1' },
@@ -63,18 +90,7 @@ export default function TldrawApp() {
     // Focus Mode Support
     const [isFocusMode, setIsFocusMode] = useState(false)
 
-    // Bridge component to listen to store changes inside Tldraw context
-    const FocusModeListener = ({ onChange }: { onChange: (isFocus: boolean) => void }) => {
-        const editor = useEditor()
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const isFocus = useValue('isFocusMode', () => (editor as any).getInstanceState().isFocusMode, [editor])
 
-        useEffect(() => {
-            onChange(isFocus)
-        }, [isFocus, onChange])
-
-        return null
-    }
 
     // Annotation Focus Mode
     const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null)
@@ -205,8 +221,8 @@ export default function TldrawApp() {
         setEditor(editorInstance)
         console.log('[TldrawApp] Editor mounted, shapes registered:', shapeUtils.map(s => (s as { type: string }).type))
 
-        // Setup store listener for UA rule updates
-        const unsubscribe = editorInstance.store.listen(() => {
+        // Debounced UA rules update to prevent excessive API calls during rapid changes
+        const debouncedUpdateUARules = debounce(() => {
             const shapes = editorInstance.getCurrentPageShapes()
             const deviceShapes = shapes.filter((s): s is IDeviceShape => s.type === 'device')
             const devicesPayload = deviceShapes.map((s) => ({
@@ -221,6 +237,11 @@ export default function TldrawApp() {
                     devices: devicesPayload
                 }).catch(e => console.error('Failed to update UA rules', e))
             }
+        }, 250)
+
+        // Setup store listener for UA rule updates
+        const unsubscribe = editorInstance.store.listen(() => {
+            debouncedUpdateUARules()
         }, { scope: 'all' })
 
         return () => unsubscribe()
@@ -616,23 +637,6 @@ export default function TldrawApp() {
 
     return (
         <div className={`w-screen h-screen absolute inset-0 overflow-hidden ${hideStylePanel ? 'hide-style-panel' : ''} ${editingDeviceId ? 'annotation-mode' : ''}`}>
-            <style>{`
-                .tl-frame-heading { display: none !important; }
-                .tl-frame__body { stroke: transparent !important; fill: transparent !important; }
-                
-                /* Z-Index Fixes */
-                .tlui-layout { z-index: 10000 !important; }
-                .tl-ui-layer { z-index: 10000 !important; }
-                
-                /* Hide UI in screenshot mode */
-                body.screenshot-mode .tlui-layout,
-                body.screenshot-mode .tl-ui-layer,
-                body.screenshot-mode .floating-ui-layer, 
-                body.screenshot-mode .vertical-toolbar {
-                    display: none !important;
-                }
-            `}</style>
-
             <GlobalControls
                 url={activeUrl}
                 onUrlChange={handleUrlChange}
@@ -649,14 +653,23 @@ export default function TldrawApp() {
                 focusModeActive={isFocusMode}
             />
 
-            <Tldraw
-                shapeUtils={shapeUtils}
-                tools={customTools}
-                components={components}
-                onMount={handleMount}
-                overrides={uiOverrides}
-                persistenceKey="site-device-tldraw"
-            />
+            <Suspense fallback={
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80 z-50">
+                    <div className="flex flex-col items-center gap-4">
+                        <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-500" />
+                        <p className="text-gray-600">Loading editor...</p>
+                    </div>
+                </div>
+            }>
+                <Tldraw
+                    shapeUtils={shapeUtils}
+                    tools={customTools}
+                    components={components}
+                    onMount={handleMount}
+                    overrides={uiOverrides}
+                    persistenceKey="site-device-tldraw"
+                />
+            </Suspense>
         </div>
     )
 }

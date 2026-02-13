@@ -84,3 +84,30 @@ body,
   /* slate-900 */
   color: white;
 }
+
+/* TLDraw Customizations */
+.tl-frame-heading {
+  display: none !important;
+}
+
+.tl-frame__body {
+  stroke: transparent !important;
+  fill: transparent !important;
+}
+
+/* Z-Index Fixes */
+.tlui-layout {
+  z-index: 10000 !important;
+}
+
+.tl-ui-layer {
+  z-index: 10000 !important;
+}
+
+/* Hide UI in screenshot mode */
+body.screenshot-mode .tlui-layout,
+body.screenshot-mode .tl-ui-layer,
+body.screenshot-mode .floating-ui-layer,
+body.screenshot-mode .vertical-toolbar {
+  display: none !important;
+}

@@ -7,9 +7,18 @@ import { DeviceMessageBridge } from './DeviceMessageBridge'
 export class DeviceEventMirror {
     private isReplaying = false
     private bridge: DeviceMessageBridge
+    private cleanupFunctions: (() => void)[] = []
 
     constructor(bridge: DeviceMessageBridge) {
         this.bridge = bridge
+    }
+
+    /**
+     * Destroy the mirror and cleanup all listeners
+     */
+    destroy(): void {
+        this.cleanupFunctions.forEach(cleanup => cleanup())
+        this.cleanupFunctions = []
     }
 
     /**
@@ -18,7 +27,7 @@ export class DeviceEventMirror {
     mirrorScroll(): void {
         let isTicking = false
 
-        window.addEventListener('scroll', () => {
+        const scrollHandler = () => {
             if (this.isReplaying) return
 
             if (!isTicking) {
@@ -46,10 +55,13 @@ export class DeviceEventMirror {
                 })
                 isTicking = true
             }
-        }, { passive: true })
+        }
+
+        window.addEventListener('scroll', scrollHandler, { passive: true })
+        this.cleanupFunctions.push(() => window.removeEventListener('scroll', scrollHandler))
 
         // Listen for scroll replays from other devices
-        this.bridge.on('REPLAY_SCROLL', (payload) => {
+        const unsubscribe = this.bridge.on('REPLAY_SCROLL', (payload) => {
             this.isReplaying = true
             const { scrollX, scrollY } = payload
             const targetX = scrollX * (document.documentElement.scrollWidth - window.innerWidth)
@@ -64,13 +76,14 @@ export class DeviceEventMirror {
                 this.isReplaying = false
             }, 100)
         })
+        this.cleanupFunctions.push(unsubscribe)
     }
 
     /**
      * Start mirroring click events
      */
     mirrorClicks(): void {
-        document.addEventListener('click', (e) => {
+        const clickHandler = (e: Event) => {
             if (this.isReplaying) return
 
             const target = e.target as Element
@@ -81,13 +94,16 @@ export class DeviceEventMirror {
 
             this.bridge.sendToBackground('EVENT_CLICK', {
                 selector,
-                x: e.clientX,
-                y: e.clientY
+                x: (e as MouseEvent).clientX,
+                y: (e as MouseEvent).clientY
             })
-        }, true)
+        }
+
+        document.addEventListener('click', clickHandler, true)
+        this.cleanupFunctions.push(() => document.removeEventListener('click', clickHandler, true))
 
         // Listen for click replays
-        this.bridge.on('REPLAY_CLICK', (payload) => {
+        const unsubscribe = this.bridge.on('REPLAY_CLICK', (payload) => {
             this.isReplaying = true
             try {
                 const element = document.querySelector(payload.selector) as HTMLElement
@@ -102,13 +118,14 @@ export class DeviceEventMirror {
                 this.isReplaying = false
             }, 50)
         })
+        this.cleanupFunctions.push(unsubscribe)
     }
 
     /**
      * Start mirroring input events
      */
     mirrorInput(): void {
-        document.addEventListener('input', (e) => {
+        const inputHandler = (e: Event) => {
             if (this.isReplaying) return
 
             const target = e.target as HTMLInputElement | HTMLTextAreaElement
@@ -121,10 +138,13 @@ export class DeviceEventMirror {
                 selector,
                 value
             })
-        }, true)
+        }
+
+        document.addEventListener('input', inputHandler, true)
+        this.cleanupFunctions.push(() => document.removeEventListener('input', inputHandler, true))
 
         // Listen for input replays
-        this.bridge.on('REPLAY_INPUT', (payload) => {
+        const unsubscribe = this.bridge.on('REPLAY_INPUT', (payload) => {
             this.isReplaying = true
             try {
                 const element = document.querySelector(payload.selector) as HTMLInputElement
@@ -140,6 +160,7 @@ export class DeviceEventMirror {
                 this.isReplaying = false
             }, 50)
         })
+        this.cleanupFunctions.push(unsubscribe)
     }
 
     /**
