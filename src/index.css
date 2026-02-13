@@ -101,6 +101,31 @@ body,
   fill: transparent !important;
 }
 
+/* Ensure frame SVG doesn't intercept clicks - let them pass to device underneath */
+.tl-shape[data-shape-type="frame"] .tl-svg-container {
+  pointer-events: none !important;
+}
+
+/* But allow interactions on annotation shapes inside frames */
+.tl-shape[data-shape-type="frame"] .tl-shape {
+  pointer-events: auto !important;
+}
+
+/* Ensure device click shield is always clickable */
+.tl-shape[data-shape-type="device"] .device-frame .absolute.inset-0.z-50 {
+  pointer-events: all !important;
+}
+
+/* Annotation containers should never block clicks on underlying devices */
+.tl-shape[data-shape-type="annotation-container"] {
+  pointer-events: none !important;
+}
+
+/* Ensure annotation containers don't create a stacking context that blocks clicks */
+.tl-shape[data-shape-type="annotation-container"][style*="opacity: 0"] {
+  display: none !important;
+}
+
 /* 
  * Frame and annotation container pointer-events are handled by:
  * 1. Soft Lock Listener in TldrawApp.tsx - redirects frame selection to device

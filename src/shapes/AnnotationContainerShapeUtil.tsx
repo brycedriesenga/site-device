@@ -45,7 +45,8 @@ export class AnnotationContainerShapeUtil extends BaseBoxShapeUtil<IAnnotationCo
     override getGeometry(shape: IAnnotationContainerShape): Geometry2d {
         // If the container is invisible (opacity 0), return an empty geometry
         // so it doesn't intercept clicks meant for the device underneath
-        if ((shape as unknown as { opacity: number }).opacity === 0) {
+        const opacity = (shape as { opacity?: number }).opacity ?? 1
+        if (opacity === 0) {
             return new Rectangle2d({
                 width: 0,
                 height: 0,
@@ -62,7 +63,7 @@ export class AnnotationContainerShapeUtil extends BaseBoxShapeUtil<IAnnotationCo
 
     override component(shape: IAnnotationContainerShape) {
         // When opacity is 0, render nothing so clicks pass through
-        const opacity = (shape as unknown as { opacity: number }).opacity
+        const opacity = (shape as { opacity?: number }).opacity ?? 1
         if (opacity === 0) {
             return null
         }
