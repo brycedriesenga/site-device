@@ -15,6 +15,7 @@ const Tldraw = lazy(() => import('tldraw').then(m => ({ default: m.Tldraw })))
 import { DeviceShapeUtil } from './shapes/DeviceShapeUtil'
 import type { IDeviceShape } from './shapes/DeviceShapeUtil'
 import { AnnotationContainerShapeUtil } from './shapes/AnnotationContainerShapeUtil'
+import { ViewportFrameShapeUtil } from './shapes/ViewportFrameShapeUtil'
 
 // Annotation shapes
 import { RectangleAnnotationShapeUtil } from './shapes/annotations/RectangleAnnotationShapeUtil'
@@ -38,6 +39,7 @@ import { loadState } from './utils/storage'
 const shapeUtils = [
     DeviceShapeUtil,
     AnnotationContainerShapeUtil,
+    ViewportFrameShapeUtil,
     RectangleAnnotationShapeUtil,
     CircleAnnotationShapeUtil,
     ArrowAnnotationShapeUtil,
@@ -474,8 +476,8 @@ export default function TldrawApp() {
                 const shape = editor.getShape(id)
                 if (!shape) return
 
-                // Identify Viewport Frame: It's a frame, child of a device
-                if (shape.type === 'frame') {
+                // Identify Viewport Frame: It's a viewport-frame, child of a device
+                if (shape.type === 'viewport-frame') {
                     const parent = editor.getShape(shape.parentId)
                     if (parent && parent.type === 'device') {
                         // Select the device instead

@@ -140,12 +140,12 @@ export const ContextualToolbar = track(({ onEnterAnnotationMode }: { onEnterAnno
         const devUrl = (shape.props as { url: string }).url || ''
 
         // 1. Ensure Clipping Frame Exists (Child of Device)
-        // We use a standard 'frame' shape to act as the viewport mask.
-        // It should match the device dimensions exactly.
+        // We use a custom 'viewport-frame' shape that doesn't intercept clicks
+        // It acts as the viewport mask for clipping annotations
         const deviceChildren = editor.getSortedChildIdsForParent(shape.id)
         const frame = deviceChildren
             .map(id => editor.getShape(id))
-            .find(s => s && s.type === 'frame')
+            .find(s => s && s.type === 'viewport-frame')
 
         let frameId: TLShapeId
         if (frame) {
@@ -154,7 +154,7 @@ export const ContextualToolbar = track(({ onEnterAnnotationMode }: { onEnterAnno
             if ((frame.props as { w: number }).w !== devW || (frame.props as { h: number }).h !== devH) {
                 editor.updateShape({
                     id: frameId,
-                    type: 'frame',
+                    type: 'viewport-frame',
                     props: { w: devW, h: devH }
                 })
             }
@@ -162,7 +162,7 @@ export const ContextualToolbar = track(({ onEnterAnnotationMode }: { onEnterAnno
             frameId = `shape:viewport_frame_${deviceId.replace('shape:', '')}` as TLShapeId
             editor.createShape({
                 id: frameId,
-                type: 'frame',
+                type: 'viewport-frame',
                 x: 0,
                 y: 0,
                 parentId: shape.id,
