@@ -6,33 +6,17 @@ export interface ScreenshotOptions {
     type: ScreenshotType
 }
 
-interface CaptureSession {
-    canvas: HTMLCanvasElement
-    ctx: CanvasRenderingContext2D
-    deviceId: string
-    scaleFactor: number
-    captureHeight: number
-    originalHeight: number
-}
-
-interface TileGrid {
-    rows: number
-    cols: number
-    tileWorldW: number
-    tileWorldH: number
-    captureX: number
-    captureY: number
-}
-
 /**
  * Handles device screenshot capture with support for viewport and full-page modes.
+ * 
+ * APPROACH:
+ * 1. For viewport screenshots: Center the device in view and capture once
+ * 2. For full-page: Resize device to full height, capture, restore
+ * 
+ * This avoids complex tiling and camera movements that were causing issues.
  */
 export class DeviceScreenshotter {
     private editor: Editor
-
-    private readonly SAFETY_MARGIN = 40
-    private readonly UI_HIDE_WAIT = 200
-    private readonly SAVE_DEBOUNCE = 500
 
     constructor(editor: Editor) {
         this.editor = editor
@@ -50,206 +34,197 @@ export class DeviceScreenshotter {
 
         const originalCamera = { ...this.editor.getCamera() }
         const selectedIds = this.editor.getSelectedShapeIds()
-        const originalZoom = originalCamera.z
-
-        const session: Omit<CaptureSession, 'ctx'> = {
-            canvas: document.createElement('canvas'),
-            deviceId: deviceShapeId,
-            scaleFactor: options.type.includes('2x') ? 2 : 1,
-            captureHeight: (shape.props as { h: number }).h,
-            originalHeight: (shape.props as { h: number }).h,
-        }
-
-        const ctx = session.canvas.getContext('2d')
-        if (!ctx) throw new Error('Failed to get canvas context')
-
-        const fullSession: CaptureSession = { ...session, ctx }
+        const originalHeight = (shape.props as { h: number }).h
+        const deviceW = (shape.props as { w: number }).w
+        const deviceH = originalHeight
+        const scaleFactor = options.type.includes('2x') ? 2 : 1
+        const isFullPage = options.type.startsWith('full-page')
+        let captureHeight = deviceH
+        let heightChanged = false
 
         try {
+            // Hide UI elements
             this.hideUI()
             this.editor.selectNone()
-            await this.wait(this.UI_HIDE_WAIT)
+            
+            // Wait for UI to hide
+            await this.wait(300)
 
-            const isFullPage = options.type.startsWith('full-page')
             if (isFullPage) {
                 const fullHeight = await this.getPageHeight(deviceShapeId)
-                if (fullHeight) {
-                    fullSession.captureHeight = Math.max(fullHeight, fullSession.originalHeight)
+                if (fullHeight && fullHeight > deviceH) {
+                    captureHeight = fullHeight
+                    heightChanged = true
+                    // Expand device for full-page capture
+                    this.editor.updateShape({
+                        id: shapeId,
+                        type: 'device',
+                        props: { h: fullHeight },
+                    })
+                    await this.wait(500) // Wait for iframe to resize
                 }
             }
 
-            const shapeAfterPrep = this.editor.getShape(shapeId)
-            if (!shapeAfterPrep || shapeAfterPrep.type !== 'device') {
-                throw new Error(`Device shape not found after prep: ${deviceShapeId}`)
-            }
-
-            const deviceW = (shapeAfterPrep.props as { w: number }).w
-
-            // Resize master canvas (output)
-            fullSession.canvas.width = deviceW * fullSession.scaleFactor
-            fullSession.canvas.height = fullSession.captureHeight * fullSession.scaleFactor
-
-            // Expand device shape if capturing full page
-            if (fullSession.captureHeight !== fullSession.originalHeight) {
-                this.editor.updateShape({
-                    id: shapeAfterPrep.id,
-                    type: 'device',
-                    props: { h: fullSession.captureHeight },
-                })
-                await this.wait(300)
-            }
-
+            // Position camera to center the device in viewport
             const bounds = this.editor.getShapePageBounds(shapeId)
-            if (!bounds) throw new Error('Failed to compute device bounds')
+            if (!bounds) throw new Error('Failed to get device bounds')
 
-            await this.captureTiles(fullSession, {
-                deviceId: shapeId,
-                deviceX: bounds.x,
-                deviceY: bounds.y,
-                deviceW,
-            }, originalZoom)
+            // Calculate camera position to center device at desired zoom
+            const viewportW = window.innerWidth
+            const viewportH = window.innerHeight
+            
+            // Camera position: center device, apply scale
+            const camX = bounds.x + bounds.w / 2 - (viewportW / 2) / scaleFactor
+            const camY = bounds.y + bounds.h / 2 - (viewportH / 2) / scaleFactor
 
-            const fileName = `${(shapeAfterPrep.props as { name: string }).name}-${options.type}.png`
-            this.downloadImage(fullSession.canvas, fileName)
+            this.editor.setCamera({ x: camX, y: camY, z: scaleFactor })
+            
+            // Wait for render
+            await this.waitForRender()
+            await this.wait(300) // Extra wait for iframe content
+
+            // Create canvas for output
+            const canvas = document.createElement('canvas')
+            canvas.width = deviceW * scaleFactor
+            canvas.height = captureHeight * scaleFactor
+            const ctx = canvas.getContext('2d')
+            if (!ctx) throw new Error('Failed to get canvas context')
+
+            // Capture the visible tab
+            const dataUrl = await this.captureTabImage()
+            if (!dataUrl) {
+                throw new Error('Failed to capture tab image')
+            }
+
+            // Load captured image
+            const image = await this.loadImage(dataUrl)
+
+            // Find where the device iframe is on screen
+            const iframe = document.querySelector(`iframe[name*="${deviceShapeId}"]`) as HTMLIFrameElement | null
+            if (!iframe) {
+                throw new Error('Device iframe not found on screen')
+            }
+
+            const iframeRect = iframe.getBoundingClientRect()
+            const dpr = window.devicePixelRatio
+
+            // Calculate source coordinates from the captured image
+            // The captured image is at DPR resolution
+            const sourceX = iframeRect.left * dpr
+            const sourceY = iframeRect.top * dpr
+            const sourceW = iframeRect.width * dpr
+            const sourceH = Math.min(iframeRect.height * dpr, captureHeight * scaleFactor * dpr)
+
+            // Draw the device portion onto the canvas
+            ctx.drawImage(
+                image,
+                sourceX,
+                sourceY,
+                sourceW,
+                sourceH,
+                0,
+                0,
+                deviceW * scaleFactor,
+                Math.min(iframeRect.height * scaleFactor, captureHeight * scaleFactor)
+            )
+
+            // For full-page, capture additional sections if device is taller than viewport
+            if (isFullPage && captureHeight > iframeRect.height) {
+                await this.captureFullPageSections(
+                    canvas, 
+                    ctx, 
+                    deviceShapeId, 
+                    captureHeight, 
+                    iframeRect.height, 
+                    deviceW,
+                    scaleFactor,
+                    camX,
+                    camY
+                )
+            }
+
+            // Download the image
+            const fileName = `${(shape.props as { name: string }).name}-${options.type}.png`
+            this.downloadImage(canvas, fileName)
+
         } finally {
-            // Restore shape height
-            if (fullSession.captureHeight !== fullSession.originalHeight) {
+            // Restore device height if changed
+            if (heightChanged) {
                 this.editor.updateShape({
                     id: shapeId,
                     type: 'device',
-                    props: { h: fullSession.originalHeight },
+                    props: { h: originalHeight },
                 })
             }
 
             // Restore camera and selection
             this.editor.setCamera(originalCamera)
             this.editor.setSelectedShapes(selectedIds)
-
             this.showUI()
         }
     }
 
     /**
-     * Capture screenshot in tiles to work around viewport limitations.
+     * Capture additional sections for full-page screenshots.
+     * Scrolls the camera down and captures the remaining content.
      */
-    private async captureTiles(
-        session: CaptureSession,
-        device: { deviceId: TLShapeId; deviceX: number; deviceY: number; deviceW: number },
-        originalZoom: number
+    private async captureFullPageSections(
+        _canvas: HTMLCanvasElement,
+        ctx: CanvasRenderingContext2D,
+        deviceShapeId: string,
+        totalHeight: number,
+        viewportHeight: number,
+        deviceW: number,
+        scaleFactor: number,
+        baseCamX: number,
+        baseCamY: number
     ): Promise<void> {
-        const grid = this.getTileGrid(session, device.deviceW)
-
-        console.log(
-            `[Screenshot] Capturing ${grid.rows}x${grid.cols} tiles (${device.deviceW}x${session.captureHeight}px at ${session.scaleFactor}x)`
-        )
-
-        for (let row = 0; row < grid.rows; row++) {
-            for (let col = 0; col < grid.cols; col++) {
-                await this.captureTile(session, device, grid, { row, col }, originalZoom)
-            }
-        }
-    }
-
-    private getTileGrid(session: CaptureSession, deviceW: number): TileGrid {
-        const viewW = window.innerWidth
-        const viewH = window.innerHeight
-
-        const captureX = this.SAFETY_MARGIN
-        const captureY = this.SAFETY_MARGIN
-
-        const safeViewW = viewW - captureX
-        const safeViewH = viewH - captureY
-
-        const tileWorldW = safeViewW / session.scaleFactor
-        const tileWorldH = safeViewH / session.scaleFactor
-
-        return {
-            captureX,
-            captureY,
-            tileWorldW,
-            tileWorldH,
-            cols: Math.ceil(deviceW / tileWorldW),
-            rows: Math.ceil(session.captureHeight / tileWorldH),
-        }
-    }
-
-    /**
-     * Capture a single tile.
-     */
-    private async captureTile(
-        session: CaptureSession,
-        device: { deviceId: TLShapeId; deviceX: number; deviceY: number; deviceW: number },
-        grid: TileGrid,
-        tile: { row: number; col: number },
-        originalZoom: number
-    ): Promise<void> {
-        const { row, col } = tile
-
-        const offX = col * grid.tileWorldW
-        const offY = row * grid.tileWorldH
-
-        // Camera translation: place the top-left of this tile at (captureX, captureY) in screen space.
-        // CRITICAL FIX: SAFETY_MARGIN is in screen pixels, don't divide by scaleFactor
-        // Formula: screen = (world - camera) * zoom  =>  camera = world - screen/zoom
-        const camX = device.deviceX + offX - grid.captureX / session.scaleFactor
-        const camY = device.deviceY + offY - grid.captureY / session.scaleFactor
-
-        this.editor.setCamera({ x: camX, y: camY, z: session.scaleFactor })
-        await this.waitForRender()
-
-        const dataUrl = await this.captureTabImage()
-        if (!dataUrl) {
-            throw new Error('Failed to capture tab image')
-        }
-
-        const image = await this.loadImage(dataUrl)
-
-        const iframe = document.querySelector(`iframe[name*="${session.deviceId}"]`) as HTMLIFrameElement | null
-        if (!iframe) {
-            console.warn(`[Screenshot] Iframe not found for tile ${row},${col}`)
-            return
-        }
-
-        const iframeRect = iframe.getBoundingClientRect()
-        const dpr = window.devicePixelRatio
-
-        const sourceX = Math.max(0, iframeRect.x)
-        const sourceY = Math.max(0, iframeRect.y)
-        const sourceRight = Math.min(window.innerWidth, iframeRect.right)
-        const sourceBottom = Math.min(window.innerHeight, iframeRect.bottom)
-
-        const sourceW = Math.max(0, sourceRight - sourceX)
-        const sourceH = Math.max(0, sourceBottom - sourceY)
-
-        if (sourceW <= 0 || sourceH <= 0) {
-            console.warn(`[Screenshot] Tile ${row},${col} has no visible area`)
-            return
-        }
-
-        const worldX = sourceX / session.scaleFactor - camX
-        const worldY = sourceY / session.scaleFactor - camY
-        const relX = worldX - device.deviceX
-        const relY = worldY - device.deviceY
-
-        const destX = relX * session.scaleFactor
-        const destY = relY * session.scaleFactor
-
-        session.ctx.drawImage(
-            image,
-            sourceX * dpr,
-            sourceY * dpr,
-            sourceW * dpr,
-            sourceH * dpr,
-            destX,
-            destY,
-            sourceW * session.scaleFactor,
-            sourceH * session.scaleFactor
-        )
-
-        console.log(`[Screenshot] Captured tile ${row},${col}`)
+        const sections = Math.ceil((totalHeight - viewportHeight) / viewportHeight)
         
-        // Restore original zoom before next tile to maintain consistent camera state
-        this.editor.setCamera({ x: camX, y: camY, z: originalZoom })
+        for (let i = 1; i <= sections; i++) {
+            // Move camera down by viewport height
+            const offsetY = i * viewportHeight
+            this.editor.setCamera({ 
+                x: baseCamX, 
+                y: baseCamY + offsetY / scaleFactor, 
+                z: scaleFactor 
+            })
+            
+            await this.waitForRender()
+            await this.wait(300)
+
+            const dataUrl = await this.captureTabImage()
+            if (!dataUrl) continue
+
+            const image = await this.loadImage(dataUrl)
+            const iframe = document.querySelector(`iframe[name*="${deviceShapeId}"]`) as HTMLIFrameElement | null
+            if (!iframe) continue
+
+            const iframeRect = iframe.getBoundingClientRect()
+            const dpr = window.devicePixelRatio
+
+            // Calculate how much of the remaining height to capture
+            const remainingHeight = totalHeight - (i * viewportHeight)
+            const captureH = Math.min(iframeRect.height, Math.max(0, remainingHeight))
+
+            if (captureH <= 0) break
+
+            const sourceY = iframeRect.top * dpr
+            const sourceH = captureH * dpr
+
+            // Draw this section below the previous ones
+            ctx.drawImage(
+                image,
+                iframeRect.left * dpr,
+                sourceY,
+                iframeRect.width * dpr,
+                sourceH,
+                0,
+                i * viewportHeight * scaleFactor,
+                deviceW * scaleFactor,
+                captureH * scaleFactor
+            )
+        }
     }
 
     /**
@@ -323,8 +298,7 @@ export class DeviceScreenshotter {
             a.download = filename
             a.click()
 
-            // Allow the download to start before revoking the URL.
-            setTimeout(() => URL.revokeObjectURL(url), this.SAVE_DEBOUNCE)
+            setTimeout(() => URL.revokeObjectURL(url), 500)
         })
     }
 
@@ -350,16 +324,12 @@ export class DeviceScreenshotter {
     }
 
     /**
-     * Wait for render completion using double requestAnimationFrame.
-     * This ensures the browser has finished painting before proceeding.
+     * Wait for render completion.
      */
     private waitForRender(): Promise<void> {
         return new Promise((resolve) => {
             requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    // Add a small additional delay to ensure Chrome extension APIs are ready
-                    setTimeout(resolve, 100)
-                })
+                requestAnimationFrame(() => resolve())
             })
         })
     }

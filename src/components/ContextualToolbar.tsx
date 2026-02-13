@@ -172,9 +172,6 @@ export const ContextualToolbar = track(({ onEnterAnnotationMode }: { onEnterAnno
                     name: ''
                 }
             })
-            // Mark the frame as locked so it doesn't intercept clicks/selection
-            // This is safe because annotations are children and can still be interacted with
-            editor.toggleLock([frameId])
         }
 
         // 2. Find or Create Annotation Container for this URL (Child of Clipping Frame)

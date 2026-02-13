@@ -102,28 +102,14 @@ body,
 }
 
 /* 
- * CRITICAL: Viewport frames (annotation mode) must not block device selection
- * When annotation mode is active, frames are created as children of devices.
- * We need to ensure:
- * 1. The frame itself doesn't intercept pointer events meant for the device
- * 2. Annotations inside the frame CAN receive pointer events
- * 3. The device's click shield works correctly
+ * Frame and annotation container pointer-events are handled by:
+ * 1. Soft Lock Listener in TldrawApp.tsx - redirects frame selection to device
+ * 2. TLDraw's internal hit testing system
+ * 
+ * Note: CSS pointer-events affects DOM events but TLDraw uses spatial index
+ * for shape selection. The soft lock listener handles redirecting frame
+ * selections to the parent device.
  */
-
-/* Frame containers should pass clicks through to parent device */
-.tl-shape[data-shape-type="frame"] {
-  pointer-events: none !important;
-}
-
-/* Frame children (annotations) should receive clicks */
-.tl-shape[data-shape-type="frame"] .tl-shape {
-  pointer-events: auto !important;
-}
-
-/* Annotation containers specifically pass clicks through */
-.tl-shape[data-shape-type="annotation-container"] {
-  pointer-events: none !important;
-}
 
 /* Z-Index Fixes */
 .tlui-layout {
