@@ -40,12 +40,11 @@ export class ViewportFrameShapeUtil extends BaseBoxShapeUtil<IViewportFrameShape
     override hideResizeHandles = () => true
     override isAspectRatioLocked = () => true
 
-    // CRITICAL: Return zero-sized geometry so this shape never participates in hit testing
-    // Clicks will pass through to the device underneath
-    override getGeometry(_shape: IViewportFrameShape): Geometry2d {
+    override getGeometry(shape: IViewportFrameShape): Geometry2d {
+        // Keep proper geometry for clipping to work
         return new Rectangle2d({
-            width: 0,
-            height: 0,
+            width: shape.props.w,
+            height: shape.props.h,
             isFilled: false,
         })
     }
