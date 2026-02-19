@@ -87,12 +87,12 @@ export default function TldrawApp() {
     const [hideStylePanel] = useState(true)
     const [recentUrls, setRecentUrls] = useState<string[]>([])
 
-    // Focus Mode Support
+    // Focus Mode Support (tldraw's built-in focus mode - should not be changed)
     const [isFocusMode, setIsFocusMode] = useState(false)
 
 
 
-    // Annotation Focus Mode
+    // Annotation Mode
     const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null)
     const editingDeviceIdRef = useRef<string | null>(null)
 
@@ -649,8 +649,8 @@ export default function TldrawApp() {
                 onForward={handleForward}
                 recentUrls={recentUrls}
                 annotationModeActive={!!editingDeviceId}
-                onExitAnnotationMode={handleExitAnnotationMode}
                 focusModeActive={isFocusMode}
+                onExitAnnotationMode={handleExitAnnotationMode}
             />
 
             <Suspense fallback={
